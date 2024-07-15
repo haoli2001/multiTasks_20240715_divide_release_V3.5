@@ -455,7 +455,7 @@ void* calcThreadFunction(void *argv)
 	{
 		//注意：此处angle没有考虑浮点角度！另：pre_device_height无用	jzy 2023.4.4
 		float angle = i;
-		getWidthHeight(far_dis,h_points, h_points_length, &pre_device_width[i], &height[i], si_angle, angle, calcInfo.config.pipe_size*calcInfo.config.wave_length, &pre_device_height[i], &e_st_min[i], &e_fi_max[i], calcInfo.config.card_num, &divided_num[i], MAX_PIPELINE_CAPICITY);
+		getWidthHeight(far_dis,h_points, h_points_length, &pre_device_width[i], &height[i], fai_angle, angle, calcInfo.config.pipe_size*calcInfo.config.wave_length, &pre_device_height[i], &e_st_min[i], &e_fi_max[i], calcInfo.config.card_num, &divided_num[i], MAX_PIPELINE_CAPICITY);
 	}
 	//printf("d_height_max=%d, d_width_max=%d\n", d_height_max, d_width_max);
 	d_height_max = 1975;
@@ -562,10 +562,6 @@ void* calcThreadFunction(void *argv)
             printf("%f %f %f\n",receive_points[idx].p[0],receive_points[idx].p[1],receive_points[idx].p[2]);
 	}
 	//生成多点接收阵列结束20220527jzy
-
-
-
-
 	//循环计算每一个频率和角度
 	float start_alpha;
 	if(fabs(calcInfo.config.continue_alpha + 1) < 0.00001)
@@ -908,11 +904,7 @@ void* calcThreadFunction(void *argv)
 					
 					float time_one_circle = maxcalcTime+time_TS_compute;
             		time_all += time_one_circle;//lihao 20240711
-					
-					
-					
-
-					
+										
 					// 将各卡计算时间存储成二叉树结构，用于调整下一度子孔径面划分
 					PreAngelTime = ConstructTimeTree(AperturePlane, calcTime, calcInfo.config.card_num);
 				}//module divid circle for() end
