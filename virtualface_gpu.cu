@@ -225,7 +225,7 @@ __global__ void dStFiExtreme2(float* d_st_min, float* d_st_max, float* d_fi_min,
 		d_fi_max[blockIdx.x] = fi_max_data[0];
 	}
 }
-void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int *height_calc,float st, float fi, float lmd_calc, int *dheight_calc, float *de_st_min, float *de_fi_max, int device_num)
+void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int *height_calc,int st, float fi, float lmd_calc, int *dheight_calc, float *de_st_min, float *de_fi_max, int device_num, int* divided_num, int max_pipeline_capicity)
 {
 	Radius direction = { far_dis, st, fi };	//射线表示用角度（r，st，fi）  θ =st，和z轴的夹角；为从正z轴来看自x轴按逆时针方向转到OM所转过的角  // snw 不能接立即数
 	
@@ -248,6 +248,7 @@ void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int
 	HANDLE_ERROR(cudaMalloc((void**)&d_spherical, num * sizeof(Radius)));
 	HANDLE_ERROR(cudaMemset(d_spherical, 0, num * sizeof(Radius)));
 
+	//将模型各点的坐标转换到球坐标系
 	dAxistoRadius_gpu << <blockSize, threadSize >> >(d_spherical, d_point, direction, num);
 	HANDLE_ERROR(cudaGetLastError());
 	HANDLE_ERROR(cudaDeviceSynchronize());
@@ -265,6 +266,7 @@ void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int
 	HANDLE_ERROR(cudaMemset(d_st_max, 0, blockSize.x * sizeof(float)));
 	HANDLE_ERROR(cudaMemset(d_fi_min, 0, blockSize.x * sizeof(float)));
 
+	//两级归约求st,fi的最大最小值
 	dStFiExtreme << <blockSize, threadSize >> >(d_spherical, d_st_min, d_st_max, d_fi_min, d_fi_max, num);
 	HANDLE_ERROR(cudaGetLastError());
 	HANDLE_ERROR(cudaDeviceSynchronize());
@@ -292,6 +294,9 @@ void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int
 	//printf("e_st_max:%f, e_st_min:%f",e_st_max, e_st_min);
 	*de_st_min = e_st_min;
 	*de_fi_max = e_fi_max;
+
+	*divided_num = ceil((float)*width_calc * (float)*height_calc / (float)max_pipeline_capicity);
+	
 
 	cudaFree(d_direction);
 	cudaFree(d_point);

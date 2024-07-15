@@ -38,7 +38,7 @@ void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int
 void create_virtualface_gpu(Direction *rays2, Square *squares2, int dwidth, int dheight, float lmd, Radius direction_radius,
 	float e_st_min, float e_fi_max, int device_id);
 void free_virtualface(Direction *rays, Square *squares);
-void getWidthHeight_Sun(float far_dis,Box b, int *width, int *height, int st, float fi, float lmd, int *dheight, float *de_st_min, float *de_fi_max, int device_num);
+void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int *height_calc,int st, float fi, float lmd_calc, int *dheight_calc, float *de_st_min, float *de_fi_max, int device_num, int* divided_num, int max_pipeline_capicity);
 void copy2host(Direction *d_rays, Square *d_squares, Direction **rays, Square **squares, int width, int height);
 //DynamicPlane* ConstructVirtualFace(DynamicPlane* dData, BinaryTimeTree** preangletime, int DeviceCount, float e_st_min, float e_fi_max, int width, int height, float lmd);
 BinaryTimeTree** ConstructTimeTree(DynamicPlane* tmp, float *runtime, int DeviceCount);

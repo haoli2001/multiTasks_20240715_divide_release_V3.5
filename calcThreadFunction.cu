@@ -15,7 +15,8 @@
 #include "scalfuc.h"
 #include "ReflectCoeff_2.h"
 #include "martixMulti.h"
-
+#include <pthread.h>
+#define MAX_PIPELINE_CAPICITY 150000000
 /**************************
 名称：struct PreBlockData
 描述：每一个Block中申请的内存指针
@@ -72,6 +73,11 @@ struct FreePoint
 
 	float **e_st_min;
 	float **e_fi_max;
+	int **divided_num;
+    int **divided_width;
+    int **divided_height;
+    float **divided_st_min;
+    float **divided_fi_max;
 	ReimOutput*** h_reim;
 	comp*** h_TSOfPerTriangle;
 	
@@ -129,6 +135,27 @@ void cleanup(void* argv)
 	if(*fp->e_st_min!=NULL)
 	{
 		free(*fp->e_st_min);
+	}
+	
+	if(*fp->divided_num!=NULL)
+	{
+		free(*fp->divided_num);
+	}
+	if(*fp->divided_width!=NULL)
+	{
+		free(*fp->divided_width);
+	}
+	if(*fp->divided_height!=NULL)
+	{
+		free(*fp->divided_height);
+	}
+	if(*fp->divided_st_min!=NULL)
+	{
+		free(*fp->divided_st_min);
+	}
+	if(*fp->divided_fi_max!=NULL)
+	{
+		free(*fp->divided_fi_max);
 	}
 	if(*fp->h_out_array!=NULL)
 	{
@@ -202,7 +229,11 @@ void* calcThreadFunction(void *argv)
 	int *pre_device_height = NULL;
 	int *pre_device_width = NULL;
 	int *height = NULL;
-
+	int *divided_num = NULL;
+	int *divided_width = NULL;
+	int *divided_height = NULL;
+	float *divided_st_min = NULL;
+	float *divided_fi_max = NULL;
 	float *e_st_min = NULL;
 	float *e_fi_max = NULL;
 	ReimOutput** h_reim = NULL;
@@ -225,6 +256,11 @@ void* calcThreadFunction(void *argv)
 
 	freePt.e_st_min=&e_st_min;
 	freePt.e_fi_max=&e_fi_max;
+	freePt.divided_num=&divided_num;
+	freePt.divided_width=&divided_width;
+	freePt.divided_height=&divided_height;
+	freePt.divided_st_min=&divided_st_min;
+	freePt.divided_fi_max=&divided_fi_max;
 	freePt.h_reim=&h_reim;
 	freePt.h_TSOfPerTriangle=&h_TSOfPerTriangle;
 	
@@ -386,7 +422,7 @@ void* calcThreadFunction(void *argv)
 	pre_device_height = (int*)malloc(sizeof(int)*sumAngleNum);
 	//每一个卡上的高
 	pre_device_width = (int*)malloc(sizeof(int)*sumAngleNum);
-
+	divided_num = (int*)malloc(sizeof(int)*sumAngleNum);
 	height = (int*)malloc(sizeof(int)*sumAngleNum);
 
 	e_st_min = (float*)malloc(sizeof(float)*sumAngleNum);
@@ -418,7 +454,7 @@ void* calcThreadFunction(void *argv)
 	for (int i = calcInfo.config.start_alpha; i <= calcInfo.config.end_alpha; i++)
 	{
 		float angle = i;
-		getWidthHeight(far_dis,h_points, h_points_length, &pre_device_width[i], &height[i], fai_angle, angle, calcInfo.config.pipe_size*calcInfo.config.wave_length, &pre_device_height[i], &e_st_min[i], &e_fi_max[i], calcInfo.config.card_num);
+		getWidthHeight(far_dis,h_points, h_points_length, &pre_device_width[i], &height[i], si_angle, angle, calcInfo.config.pipe_size*calcInfo.config.wave_length, &pre_device_height[i], &e_st_min[i], &e_fi_max[i], calcInfo.config.card_num, &divided_num[i], MAX_PIPELINE_CAPICITY);
 	}
 	//printf("d_height_max=%d, d_width_max=%d\n", d_height_max, d_width_max);
 	d_height_max = 1975;
