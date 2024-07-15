@@ -500,6 +500,7 @@ void ConstructNodeRight(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree
 参数：BinaryTimeTree** pre_angle_time:前一角度的计算时间; int DeviceCount:GPU数量; float e_st_min, float e_fi_max, int width, int height:虚拟孔径面信息; float lmd:划分步长
 返回值：DynamicPlane* dData:各GPU卡上的子孔径面边界信息
 ***************************/
+//根据jzy说法，此动态生成虚拟孔径面会造成少一个卡计算，后续修改为0413即v3.0版本的相对应函数
 void ConstructVirtualFace(DynamicPlane* array, DynamicPlane* dData, BinaryTimeTree** pre_angle_time, int DeviceCount, float e_st_min, float e_fi_max, int width, int height, float lmd)
 {
 	int NodeNum = 2 * DeviceCount - 1;
