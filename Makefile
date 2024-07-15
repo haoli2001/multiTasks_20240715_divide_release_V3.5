@@ -1,4 +1,5 @@
-CUFLAGS= -g -D_FORCE_INLINES -Xcompiler -fopenmp -lineinfo -m64 -arch -O3 sm_60 --ptxas-options=-v -I ../include -I /usr/include/nvidia/gdk/
+#CUFLAGS=-D_FORCE_INLINES -Xcompiler -fopenmp -lineinfo -m64 -arch -O3 sm_60 --ptxas-options=-v -I ../include -I /usr/include/nvidia/gdk/
+CUFLAGS= -D_FORCE_INLINES -Xcompiler -fopenmp -lineinfo -O3 -m64 -arch sm_60 --ptxas-options=-v -I ../include -I /usr/include/nvidia/gdk/
 # --ptxas-options=-v -arch sm_20 #-use_fast_math -m64 
 #-maxrregcount 31 
 
