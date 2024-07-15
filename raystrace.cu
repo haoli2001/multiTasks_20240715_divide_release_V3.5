@@ -830,7 +830,7 @@ void allraystrace_v2(Direction *d_rays, Square *d_squares, int width, int height
 	direction.z /= temp;
 
 	sideraytracekernel_1d_gpu << <gridSize1, blockSize1 >> >(d_root, d_rays, d_squares, d_array, d_points, d_triangles, (width + 1) * (height + 1), direction, water_line);
-	HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());//20240715
 	HANDLE_ERROR(cudaDeviceSynchronize());
 
 	dim3 threadSize(512, 1, 1);
@@ -871,21 +871,21 @@ void allraystrace_v2(Direction *d_rays, Square *d_squares, int width, int height
 */
 
 	int DivRayTubeNumIdx = BlockSize.x;
-	HANDLE_ERROR(cudaMemcpy(DivRayTubeNum, &d_sum_Gmem[DivRayTubeNumIdx], sizeof(int), cudaMemcpyDeviceToHost));
+	//HANDLE_ERROR(cudaMemcpy(DivRayTubeNum, &d_sum_Gmem[DivRayTubeNumIdx], sizeof(int), cudaMemcpyDeviceToHost));//20240715
 	//debug*********
 	//printf("DivRayTubeNumIdx=%d\n",DivRayTubeNumIdx);
 	//***********
 	DivRayTubeNumAdd << <BlockSize, threadSize >> >(d_DivRayTubeNum, d_sum_Gmem, array_length);
-	//HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());//20240715
 	HANDLE_ERROR(cudaDeviceSynchronize());
 
 	ScanInArray << <blockSize, threadSize >> >(d_squares, d_squares_pred, width * height);
-	//HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());//20240715
 	
 	dim3 Sizethread(256, 1, 1);
 	dim3 Sizeblock(width * height / 512 + 1, 1, 1);
 	ExclusiveSumScan << <Sizeblock, Sizethread >> >(d_squares_pred, width * height);
-	HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());//20240715
 
 	CreateCenterRay << <blockSize, threadSize >> >(d_rays, d_squares, (width + 1) * (height + 1), d_DivRayTubeNum, d_squares_pred);
 	HANDLE_ERROR(cudaGetLastError());

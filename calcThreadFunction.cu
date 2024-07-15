@@ -536,8 +536,9 @@ void* calcThreadFunction(void *argv)
 	fend = fbeg + band * dopGene * dopGene;   // LV20221229 原有计算，错误： fend = fbeg + band;
 
 	int taosize = int(fs * Tao);
-	int maxsize;
+	//int maxsize;
 	int totalsize= int(calcInfo.config.sampling_width * fs);//20210402
+	printf("[debug] totalsize = %d\n",totalsize);
 
 	//FILE* fileresult_1200 = fopen("result_1200", "w");//wangying
 	FILE* fileresult_1200;
@@ -548,10 +549,15 @@ void* calcThreadFunction(void *argv)
 	//memset(result_1200_re, 0, maxsize * sizeof(float));
 	float* result_1200_im;
 	//memset(result_1200_im, 0, maxsize * sizeof(float));//20200920
-	int minZeroNum=INT_MAX,maxZeroNum=INT_MIN;//20210308
+	//int minZeroNum=INT_MAX,maxZeroNum=INT_MIN;//20210308
+
+	//202407112 hjc 每张卡计算出的的MinZeroNum，MaxZeroNum， maxsize都不一样
+	int allDeviceMinZeroNum[calcInfo.config.card_num];//存储每张卡负责的虚拟孔径面的MinZeroNum
+	int allDeviceMaxZeroNum[calcInfo.config.card_num];//存储每张卡负责的虚拟孔径面的MaxZeroNum
+	int allDeviceMaxsizes[calcInfo.config.card_num];//存储每张卡负责的虚拟孔径面的maxsize
 
 	float* result_1200;//20210402
-	result_1200 = (float*)malloc( totalsize* 2*sizeof(float));//20210402
+	result_1200 = (float*)malloc( totalsize* sizeof(float));//20210402
 
 	comp result={0,0};
 	float* s_sum_re;//20200919 面积积分结果
@@ -595,7 +601,7 @@ void* calcThreadFunction(void *argv)
 				float time_all=0;
 				result.re=0;
 				result.im=0;
-				memset(result_1200, 0, totalsize *2* sizeof(float));
+				memset(result_1200, 0, totalsize * sizeof(float));
 				//先将数据清零，避免上一度的结果影响
 				for (int p = 0; p < calcInfo.config.card_num; p++)
 				{
@@ -626,6 +632,14 @@ void* calcThreadFunction(void *argv)
 					pthread_testcancel(); 
 					//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
 					pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
+					//20240712 hjc 每次循环先将数据清零，避免上一度的结果影响
+					for (int p = 0; p < calcInfo.config.card_num; p++)
+					{
+						allDeviceMaxsizes[p]=0;
+						allDeviceMaxZeroNum[p]=INT_MIN;
+						allDeviceMinZeroNum[p]=INT_MAX;
+					}
 					comp *rnt_sum = (comp *)malloc(sizeof(comp)*calcInfo.config.card_num);
 					memset(rnt_sum, 0,sizeof(comp)*calcInfo.config.card_num);
 
@@ -788,8 +802,8 @@ void* calcThreadFunction(void *argv)
 						{
 							float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
 							int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
-							if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
-							if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+							if(pendZeroNum!=0&&pendZeroNum<allDeviceMinZeroNum[j]) allDeviceMinZeroNum[j]=pendZeroNum;
+							if(pendZeroNum>allDeviceMaxZeroNum[j]) allDeviceMaxZeroNum[j]=pendZeroNum;
 							// 
 							// if(c_effrays[idx].p_cent_distance != 0 && pendZeroNum < minZeroNum) 
 							// 	minZeroNum = pendZeroNum;
@@ -814,15 +828,25 @@ void* calcThreadFunction(void *argv)
 						rnt_sum[j].im = sum.im;
 						rnt_sum[j].re = sum.re;
 
-						maxsize = maxZeroNum + taosize - minZeroNum + 400;
+						//maxsize = maxZeroNum + taosize - minZeroNum + 400;
 
-						printf("maxsize, minZeroNum, maxZeroNum+taosize: %d, %d, %d\n",maxsize, minZeroNum, maxZeroNum+taosize);
+						//20240712 hjc 获取当前卡的maxZeroNum，minZeroNum，计算并保存allDeviceMaxsizes[j]，该部分参考jzy
+						int maxZeroNum = allDeviceMaxZeroNum[j];
+						int minZeroNum = allDeviceMinZeroNum[j];
+						int maxsize = maxZeroNum + taosize - minZeroNum + 400;
+						allDeviceMaxsizes[j] = maxsize;
+						printf("GPU%d: minZeroNum, maxZeroNum, maxsiez: %d, %d, %d\n", j, minZeroNum, maxZeroNum, maxsize);
 
 						//float *d_m_sum_re,*d_m_sum_im;
 						
 						//20210331
-						HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_re[j], maxsize * sizeof(float)));
-						HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_im[j], maxsize * sizeof(float)));
+						//HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_re[j], maxsize * sizeof(float)));
+						//HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_im[j], maxsize * sizeof(float)));
+
+						//20240712 hjc 因该变量同时存储对声线积分进行第一级归约的中间结果，故增加开辟大小，以避免越界，参考jzy
+						//时域积分结果仍存储在该变量的前maxsize长度中
+						HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_re[j], (maxsize + SubAperturePlane[j].width * SubAperturePlane[j].height / 512 + 1) * sizeof(float)));
+						HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_im[j], (maxsize + SubAperturePlane[j].width * SubAperturePlane[j].height / 512 + 1) * sizeof(float)));
 						
 						for (int ig = 0; ig <  maxsize; ig++) 
 						{//wangying 20210308
@@ -837,17 +861,33 @@ void* calcThreadFunction(void *argv)
 						}
 					}//parallel end for
 
-					s_sum_re = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果
-					s_sum_im = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果	
+					//20240712 hjc 计算所有卡的maxsize的和，该部分参考jzy
+					int sumMaxsize = 0;					
+					for(int d_idx = 0;d_idx < calcInfo.config.card_num; ++d_idx)
+					{
+						sumMaxsize += allDeviceMaxsizes[d_idx];						
+					}
+					printf("[DEBUG]sumMaxsize = %d\n",sumMaxsize);
+
+					s_sum_re = (float* )malloc(sumMaxsize * sizeof(float));//20200919 面积积分结果
+					s_sum_im = (float* )malloc(sumMaxsize * sizeof(float));//20200919 面积积分结果	
 					//20210331
 					omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
 					#pragma omp parallel
 					{
 						int j = omp_get_thread_num();
+						//20240712 hjc 修改逻辑，因为每个maxsize不同，获取的地址偏移量不同，该部分参考jzy
+						int maxsize = allDeviceMaxsizes[j];
+						int cpOffset = 0;
+						for(int d_idx = 0; d_idx < j; d_idx++)
+						{
+							cpOffset += allDeviceMaxsizes[d_idx];
+							//printf("[DEBUG]device %d, in circle, allDeviceMaxsizes[%d] = %d\n", j, d_idx, allDeviceMaxsizes[d_idx]);
+						}
 						HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[j]));
 
-						HANDLE_ERROR(cudaMemcpy(s_sum_re+ j * maxsize, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
-						HANDLE_ERROR(cudaMemcpy(s_sum_im+ j * maxsize, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+						HANDLE_ERROR(cudaMemcpy(s_sum_re + cpOffset, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+						HANDLE_ERROR(cudaMemcpy(s_sum_im + cpOffset, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
 						cudaFree(d_m_sum_re[j]);
 						cudaFree(d_m_sum_im[j]);
 					}	
@@ -867,11 +907,21 @@ void* calcThreadFunction(void *argv)
 					
 					free(rnt_sum);
 
-					result_1200_re = (float*)malloc(maxsize * sizeof(float));
-					memset(result_1200_re, 0, maxsize * sizeof(float));
-					result_1200_im = (float*)malloc(maxsize * sizeof(float));
-					memset(result_1200_im, 0, maxsize * sizeof(float));//20200920
+					//20240712 hjc 修改逻辑：总的回波的最大点应该是在所有卡中的maxZeroNum + taosize + 200 (200是为了防止越界)
+					int mMaxZeroNum = INT_MIN;
+					for(int i = 0; i < calcInfo.config.card_num; ++i)
+					{
+						mMaxZeroNum = allDeviceMaxZeroNum[i] > mMaxZeroNum ? allDeviceMaxZeroNum[i] : mMaxZeroNum;
+					}
+					int totalEchoSize = mMaxZeroNum + taosize + 200;
+					printf("[debug]totalEchoSize = %d\n", totalEchoSize);
 
+					result_1200_re = (float*)malloc(totalEchoSize * sizeof(float));
+					memset(result_1200_re, 0, totalEchoSize * sizeof(float));
+					result_1200_im = (float*)malloc(totalEchoSize * sizeof(float));
+					memset(result_1200_im, 0, totalEchoSize * sizeof(float));//20200920
+
+					/*
 					for (int ig =  0; ig <  maxsize; ig++)//wangying 20210308 
 					{
 						float all_s_sum_re = 0;
@@ -884,17 +934,40 @@ void* calcThreadFunction(void *argv)
 						result_1200_re[ig] = all_s_sum_re;
 						result_1200_im[ig] = all_s_sum_im;
 					}
+					*/
 
-
-
-					free(s_sum_re);
-					free(s_sum_im);
-
-					for(int ig =  0; ig <  maxsize; ig++)
+					printf("[debug]before 合并每张卡的时域积分结果\n");
+					//合并每张卡的时域积分结果
+					//20240712 hjc 由上述注释逻辑修改为下列逻辑
+					int s_sum_re_idx = 0;
+					for(int d_idx = 0; d_idx < calcInfo.config.card_num; ++d_idx)
 					{
-						result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
+						for(int ig = 0;ig < allDeviceMaxsizes[d_idx]; ++ig)
+						{
+							result_1200_re[allDeviceMinZeroNum[d_idx] - 200 + ig] += s_sum_re[s_sum_re_idx];
+							result_1200_im[allDeviceMinZeroNum[d_idx] - 200 + ig] += s_sum_im[s_sum_re_idx];
+							result_1200[allDeviceMinZeroNum[d_idx] - 200 + ig] += s_sum_re[s_sum_re_idx];
+							++s_sum_re_idx;
+						}
 					}
 
+					if (s_sum_re != NULL)  //20230824
+						free(s_sum_re);
+					if (s_sum_im != NULL) //20230824
+						free(s_sum_im);
+
+					//for(int ig =  0; ig <  maxsize; ig++)
+					//{
+					//	result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
+					//}
+
+					//printf("[debug]before free(result_1200_re)\n");
+					if (result_1200_re != NULL)  //20230824
+						free(result_1200_re);
+					//printf("[debug]after free(result_1200_re)\n");
+					if (result_1200_im != NULL)  //20230824
+						free(result_1200_im);
+					//printf("[debug]after free(result_1200_im)\n");
 
 					//叠加上一轮TS值
 					result.re += all_rnt_sum.re;
@@ -1061,8 +1134,8 @@ void* calcThreadFunction(void *argv)
 		printf("第%d个阵元计算完毕\n",recv_index);
 	}
     fclose(fileresult_TS);
-	free(result_1200_re);
-	free(result_1200_im);
+	//free(result_1200_re);
+	//free(result_1200_im);
 	free(result_1200);
 	//cudaFree(d_s_sum_re);
 	//cudaFree(d_s_sum_re);
