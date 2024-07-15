@@ -397,6 +397,155 @@ void getWidthHeight_Sun(float far_dis,Box b, int *width, int *height, int st, fl
 	return;
 }
 
+/*******************************3.0不切分版本的生成子孔径面函数，会少一张卡计算****************************************/
+// void ConstructCore(DynamicPlane *node, float e_st_min, float e_fi_max, int width, int height)
+// {
+// 	node->st_min = e_st_min;
+// 	node->fi_max = e_fi_max;
+// 	node->height = height;
+// 	node->width = width;
+// }
+
+// void ConstructNodeLeft(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree* pre_angle_time, float lmd)
+// {
+// 	if (parent.width >= parent.height)
+// 	{
+// 		child->flag = 0; // 列向划分
+
+// 		int width;
+// 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 1)
+// 		{
+// 			// 第一度仿真或与前一度划分方向不一样时
+// 			child->GPUnum = ceil(parent.GPUnum / 2); // ceil:返回大于等于它的最小整数
+// 			child->ratio = ceil(parent.GPUnum / 2) / parent.GPUnum;
+// 			width = ceil(parent.width * child->ratio);
+// 		}
+// 		else
+// 		{
+// 			int deltaW = (int)(0.5 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
+// 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
+// 			width = (int)(parent.width * pre_angle_time->ratio) + deltaW;
+// 			child->ratio = (float)width / parent.width;
+// 		}
+// 		float fi_max = parent.fi_max - (parent.width - width) * lmd;
+// 		ConstructCore(child, parent.st_min, fi_max, width, parent.height);
+// 	}
+// 	else
+// 	{
+// 		child->flag = 1; // 行向划分
+
+// 		int height;
+// 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 0)
+// 		{
+// 			// 第一度仿真或与前一度划分方向不一样时
+// 			child->GPUnum = ceil(parent.GPUnum / 2); // ceil:返回大于等于它的最小整数
+// 			child->ratio = ceil(parent.GPUnum / 2) / parent.GPUnum;
+// 			height = ceil(parent.height * child->ratio);
+// 		}
+// 		else
+// 		{
+// 			int deltaH = (int)(0.5 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
+// 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
+// 			height = (int)(parent.height*pre_angle_time->ratio) + deltaH;
+// 			child->ratio = (float)height / parent.height;
+// 		}
+// 		float st_min = parent.st_min + (parent.height - height) * lmd;
+// 		ConstructCore(child, st_min, parent.fi_max, parent.width, height);
+// 	}
+// }
+
+// void ConstructNodeRight(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree* pre_angle_time)
+// {
+// 	if (parent.width >= parent.height)
+// 	{
+// 		child->flag = 0; // 按列
+
+// 		int width;
+// 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 1)
+// 		{
+// 			// 第一度仿真或与前一度划分方向不一样时
+// 			child->GPUnum = floor(parent.GPUnum / 2); // floor:返回小于等于它的最小整数
+// 			width = parent.width - ceil(parent.width * ceil(parent.GPUnum / 2) / parent.GPUnum);
+// 		}
+// 		else
+// 		{
+// 			int deltaW = (int)(0.5 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
+// 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
+// 			width = parent.width - (int)(parent.width * pre_angle_time->ratio) + deltaW;
+// 		}
+// 		ConstructCore(child, parent.st_min, parent.fi_max, width, parent.height);
+// 	}
+// 	else
+// 	{
+// 		child->flag = 1; // 按行
+
+// 		int height;
+// 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 0)
+// 		{
+// 			child->GPUnum = floor(parent.GPUnum / 2); // floor:返回小于等于它的最小整数
+// 			height = parent.height - ceil(parent.height * ceil(parent.GPUnum / 2) / parent.GPUnum);
+// 		}
+// 		else
+// 		{
+// 			int deltaH = (int)(0.5 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
+// 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
+// 			height = parent.height - (int)(parent.height * pre_angle_time->ratio) + deltaH;
+// 		}
+// 		ConstructCore(child, parent.st_min, parent.fi_max, parent.width, height);
+// 	}
+// }
+
+// /**************************
+// 名称：DynamicPlane* ConstructVirtualFace()
+// 描述：动态生成子孔径面
+// 参数：BinaryTimeTree** pre_angle_time:前一角度的计算时间; int DeviceCount:GPU数量; float e_st_min, float e_fi_max, int width, int height:虚拟孔径面信息; float lmd:划分步长
+// 返回值：DynamicPlane* dData:各GPU卡上的子孔径面边界信息
+// ***************************/
+// //根据jzy说法，此动态生成虚拟孔径面会造成少一个卡计算，后续修改为0413即v3.0版本的相对应函数
+// void ConstructVirtualFace(DynamicPlane* array, DynamicPlane* dData, BinaryTimeTree** pre_angle_time, int DeviceCount, float e_st_min, float e_fi_max, int width, int height, float lmd)
+// {
+// 	int NodeNum = 2 * DeviceCount - 1;
+
+// 	//DynamicPlane* array = (DynamicPlane*)malloc(NodeNum * sizeof(DynamicPlane));
+// 	int index = 1;
+
+// 	while (index <= NodeNum)
+// 	{
+// 		if (index == 1) // 创建根节点
+// 		{
+// 			array[index - 1].st_min = e_st_min;
+// 			array[index - 1].fi_max = e_fi_max;
+// 			array[index - 1].height = height;
+// 			array[index - 1].width = width;
+// 			array[index - 1].GPUnum = DeviceCount;
+			
+// 			if (index >= DeviceCount && index <= NodeNum) // 单卡
+// 			{
+// 				dData[index - DeviceCount] = array[index - 1];
+// 			}
+// 			index++;
+// 			continue;
+// 		}
+
+// 		if (index % 2 == 0) // 左子节点
+// 		{
+// 			ConstructNodeLeft(array[index / 2 - 1], &array[index - 1], pre_angle_time[index / 2 - 1], lmd);
+// 		}
+// 		else // 右子节点
+// 		{
+// 			ConstructNodeRight(array[index / 2 - 1], &array[index - 1], pre_angle_time[index / 2 - 1]);
+// 		}
+
+// 		if (index >= DeviceCount && index <= NodeNum)
+// 		{
+// 			dData[index - DeviceCount] = array[index - 1];
+// 		}
+// 		index++;
+// 	}
+// }
+
+
+/*********************************修改为之前3.0切分版本中的动态生成子空镜面函数，此版本应该可以算十张卡************************/
 void ConstructCore(DynamicPlane *node, float e_st_min, float e_fi_max, int width, int height)
 {
 	node->st_min = e_st_min;
@@ -415,13 +564,13 @@ void ConstructNodeLeft(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree*
 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 1)
 		{
 			// 第一度仿真或与前一度划分方向不一样时
-			child->GPUnum = ceil(parent.GPUnum / 2); // ceil:返回大于等于它的最小整数
-			child->ratio = ceil(parent.GPUnum / 2) / parent.GPUnum;
+			//child->GPUnum = ceil(parent.GPUnum / 2.0); // ceil:返回大于等于它的最小整数
+			child->ratio = (float)child->GPUnum / parent.GPUnum;
 			width = ceil(parent.width * child->ratio);
 		}
 		else
 		{
-			int deltaW = (int)(0.5 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
+			int deltaW = (int)(0 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
 			width = (int)(parent.width * pre_angle_time->ratio) + deltaW;
 			child->ratio = (float)width / parent.width;
@@ -437,13 +586,13 @@ void ConstructNodeLeft(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree*
 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 0)
 		{
 			// 第一度仿真或与前一度划分方向不一样时
-			child->GPUnum = ceil(parent.GPUnum / 2); // ceil:返回大于等于它的最小整数
-			child->ratio = ceil(parent.GPUnum / 2) / parent.GPUnum;
+			//child->GPUnum = ceil(parent.GPUnum / 2.0); // ceil:返回大于等于它的最小整数
+			child->ratio = (float)child->GPUnum / parent.GPUnum;
 			height = ceil(parent.height * child->ratio);
 		}
 		else
 		{
-			int deltaH = (int)(0.5 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
+			int deltaH = (int)(0 * (pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum - pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum) / \
 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
 			height = (int)(parent.height*pre_angle_time->ratio) + deltaH;
 			child->ratio = (float)height / parent.height;
@@ -463,12 +612,14 @@ void ConstructNodeRight(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree
 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 1)
 		{
 			// 第一度仿真或与前一度划分方向不一样时
-			child->GPUnum = floor(parent.GPUnum / 2); // floor:返回小于等于它的最小整数
-			width = parent.width - ceil(parent.width * ceil(parent.GPUnum / 2) / parent.GPUnum);
+			//child->GPUnum = floor(parent.GPUnum / 2.0); // floor:返回小于等于它的最小整数
+			//width = parent.width - ceil(parent.width * ceil(parent.GPUnum / 2.0) / parent.GPUnum);
+			child->ratio = (float)child->GPUnum / parent.GPUnum;
+			width = ceil(parent.width * child->ratio);
 		}
 		else
 		{
-			int deltaW = (int)(0.5 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
+			int deltaW = (int)(0 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
 			width = parent.width - (int)(parent.width * pre_angle_time->ratio) + deltaW;
 		}
@@ -481,12 +632,14 @@ void ConstructNodeRight(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree
 		int height;
 		if (pre_angle_time->runtime == 0 || pre_angle_time->flag == 0)
 		{
-			child->GPUnum = floor(parent.GPUnum / 2); // floor:返回小于等于它的最小整数
-			height = parent.height - ceil(parent.height * ceil(parent.GPUnum / 2) / parent.GPUnum);
+			//child->GPUnum = floor(parent.GPUnum / 2.0); // floor:返回小于等于它的最小整数
+			//height = parent.height - ceil(parent.height * ceil(parent.GPUnum / 2.0) / parent.GPUnum);
+			child->ratio = (float)child->GPUnum / parent.GPUnum;
+			height = ceil(parent.height * child->ratio);
 		}
 		else
 		{
-			int deltaH = (int)(0.5 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
+			int deltaH = (int)(0 * (pre_angle_time->leftchild->runtime * pre_angle_time->rightchild->GPUnum - pre_angle_time->rightchild->runtime * pre_angle_time->leftchild->GPUnum) / \
 				(pre_angle_time->AveTimeLeft * pre_angle_time->rightchild->GPUnum + pre_angle_time->AveTimeRight * pre_angle_time->leftchild->GPUnum));
 			height = parent.height - (int)(parent.height * pre_angle_time->ratio) + deltaH;
 		}
@@ -500,11 +653,18 @@ void ConstructNodeRight(DynamicPlane parent, DynamicPlane* child, BinaryTimeTree
 参数：BinaryTimeTree** pre_angle_time:前一角度的计算时间; int DeviceCount:GPU数量; float e_st_min, float e_fi_max, int width, int height:虚拟孔径面信息; float lmd:划分步长
 返回值：DynamicPlane* dData:各GPU卡上的子孔径面边界信息
 ***************************/
-//根据jzy说法，此动态生成虚拟孔径面会造成少一个卡计算，后续修改为0413即v3.0版本的相对应函数
 void ConstructVirtualFace(DynamicPlane* array, DynamicPlane* dData, BinaryTimeTree** pre_angle_time, int DeviceCount, float e_st_min, float e_fi_max, int width, int height, float lmd)
 {
 	int NodeNum = 2 * DeviceCount - 1;
-
+    
+    for (int index = DeviceCount; index <= NodeNum; index++)
+    {
+        array[index - 1].GPUnum = 1;
+    }
+    for (int index = NodeNum - 1; index >0; index -= 2)
+    {
+        array[index / 2 - 1].GPUnum = array[index].GPUnum + array[index - 1].GPUnum;
+    }
 	//DynamicPlane* array = (DynamicPlane*)malloc(NodeNum * sizeof(DynamicPlane));
 	int index = 1;
 
@@ -542,7 +702,7 @@ void ConstructVirtualFace(DynamicPlane* array, DynamicPlane* dData, BinaryTimeTr
 		index++;
 	}
 }
-
+/***********************************************************************/
 /**************************
 名称：BinaryTimeTree** ConstructTimeTree()
 描述：将各卡的计算时间存储成二叉树结构
