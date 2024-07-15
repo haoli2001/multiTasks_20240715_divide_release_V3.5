@@ -786,8 +786,13 @@ void* calcThreadFunction(void *argv)
 						{
 							float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
 							int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
-							if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
-							if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+							//if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
+							//if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+							//这里改成如下判断可以加速
+							if(c_effrays[idx].p_cent_distance != 0 && pendZeroNum < minZeroNum) 
+								minZeroNum = pendZeroNum;
+							if(pendZeroNum > maxZeroNum) 
+								maxZeroNum = pendZeroNum;
 						}//20210308
 						free(c_effrays);
 						free(c_center);	   
