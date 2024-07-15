@@ -434,7 +434,7 @@ void* calcThreadFunction(void *argv)
 
 	//多卡上的malloc 和树，顶点，三角面片，包围盒,使用OpenMp实现多线程
 	omp_set_num_threads(calcInfo.config.card_num);
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		int i = omp_get_thread_num();
 		cudaSetDevice(calcInfo.config.select_device_list[i]);
@@ -453,6 +453,7 @@ void* calcThreadFunction(void *argv)
 	//获取每一度虚拟孔径面所需宽高，通过先得到每一度的宽高，按最大的开辟空间，减少了每一度扫描的空间开辟时间
 	for (int i = calcInfo.config.start_alpha; i <= calcInfo.config.end_alpha; i++)
 	{
+		//注意：此处angle没有考虑浮点角度！另：pre_device_height无用	jzy 2023.4.4
 		float angle = i;
 		getWidthHeight(far_dis,h_points, h_points_length, &pre_device_width[i], &height[i], si_angle, angle, calcInfo.config.pipe_size*calcInfo.config.wave_length, &pre_device_height[i], &e_st_min[i], &e_fi_max[i], calcInfo.config.card_num, &divided_num[i], MAX_PIPELINE_CAPICITY);
 	}
@@ -468,7 +469,7 @@ void* calcThreadFunction(void *argv)
 	//根据最大的宽高开辟空间
 	omp_set_dynamic(0);
 	omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
-#pragma omp parallel
+	#pragma omp parallel
 	{
 
 		int i = omp_get_thread_num();
@@ -538,7 +539,7 @@ void* calcThreadFunction(void *argv)
 	int minZeroNum=INT_MAX,maxZeroNum=INT_MIN;//20210308
 
 	float* result_1200;//20210402
-
+	comp result={0,0};
 	float* s_sum_re;//20200919 面积积分结果
 	float* s_sum_im;//20200919 面积积分结果
 
@@ -575,150 +576,150 @@ void* calcThreadFunction(void *argv)
 
 	for(int recv_index = calcInfo.config.recvPointsStartIdx; recv_index < sumnum; recv_index ++)
 	{
-	float angle = start_alpha;
-	for (float f = calcInfo.config.start_frequency; f <= calcInfo.config.end_frequency; f += 0.1)
-	{
-		for (int i = start_alpha; i <= calcInfo.config.end_alpha; i++)
+		float angle = start_alpha;
+		for (float f = calcInfo.config.start_frequency; f <= calcInfo.config.end_frequency; f += 0.1)
 		{
-            //多卡的时间统计 同时启动
-            simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
-            float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);
-            memset(calcTime,0,sizeof(float)*calcInfo.config.card_num);
-			// = fopen("i", "w");//wangying
-			sprintf(nameout,"./data/%.2f_recv%d.txt",angle,recv_index);
-			fileresult_1200=fopen(nameout,"w");//20200924
+			for (int i = start_alpha; i <= calcInfo.config.end_alpha; i++)
+			{
+            	//多卡的时间统计 同时启动
+            	simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
+           		float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);
+           		memset(calcTime,0,sizeof(float)*calcInfo.config.card_num);
+				// = fopen("i", "w");//wangying
+				sprintf(nameout,"./data/%.2f_recv%d.txt",angle,recv_index);
+				fileresult_1200=fopen(nameout,"w");//20200924
 		
-			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-            //线程退出的监视点
-			pthread_testcancel(); 
-			//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
-			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-            //先将数据清零，避免上一度的结果影响
-			for (int p = 0; p < calcInfo.config.card_num; p++)
-			{
-				memset(h_TSOfPerTriangle[p], 0, sizeof(comp) * calcInfo.triangles_length);
-			}
-			comp *rnt_sum = (comp *)malloc(sizeof(comp)*calcInfo.config.card_num);
-			memset(rnt_sum, 0,sizeof(comp)*calcInfo.config.card_num);
-			float lmd = 1.5 / f;          // 声波波长
+				pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+            	//线程退出的监视点
+				pthread_testcancel(); 
+				//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
+				pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+            	//先将数据清零，避免上一度的结果影响
+				for (int p = 0; p < calcInfo.config.card_num; p++)
+				{
+					memset(h_TSOfPerTriangle[p], 0, sizeof(comp) * calcInfo.triangles_length);
+				}
+				comp *rnt_sum = (comp *)malloc(sizeof(comp)*calcInfo.config.card_num);
+				memset(rnt_sum, 0,sizeof(comp)*calcInfo.config.card_num);
+				float lmd = 1.5 / f;          // 声波波长
 
 
-			//多点接收阵列坐标转换到目标坐标系
-			float R0 = far_dis;
-			float alpha = angle * D2R;
-			float beta = fai_angle * D2R;
-			//float P0_B_A = R0 * sin(beta) * cos(alpha)
-			float H_Axis_Angle = calcInfo.config.H_axis_angle * D2R;
-			float V_Axis_Angle = calcInfo.config.V_axis_angle * D2R;
+				//多点接收阵列坐标转换到目标坐标系
+				float R0 = far_dis;
+				float alpha = angle * D2R;
+				float beta = fai_angle * D2R;
+				//float P0_B_A = R0 * sin(beta) * cos(alpha)
+				float H_Axis_Angle = calcInfo.config.H_axis_angle * D2R;
+				float V_Axis_Angle = calcInfo.config.V_axis_angle * D2R;
 		
-			printf("H_Axis_Angle = %f\n",H_Axis_Angle);	//调试用
-			if((alpha >=0* D2R)&&(alpha <90*D2R))
-			{
-				H_Axis_Angle = H_Axis_Angle;
-			}
-			else if((alpha >=90* D2R)&&(alpha <=180*D2R))
-			{
-				H_Axis_Angle = -H_Axis_Angle;
-			}
-			else
-			{}
+				printf("H_Axis_Angle = %f\n",H_Axis_Angle);	//调试用
+				if((alpha >=0* D2R)&&(alpha <90*D2R))
+				{
+					H_Axis_Angle = H_Axis_Angle;
+				}
+				else if((alpha >=90* D2R)&&(alpha <=180*D2R))
+				{
+					H_Axis_Angle = -H_Axis_Angle;
+				}
+				else
+				{}
 
-			if((beta  >=0* D2R)&&(beta  <90*D2R))
-			{
-				V_Axis_Angle = -V_Axis_Angle;
-			}
-			else if((beta  >90* D2R)&&(beta  <=180*D2R))
-			{
-				V_Axis_Angle = V_Axis_Angle;
-			}
-			else
-			{}
+				if((beta  >=0* D2R)&&(beta  <90*D2R))
+				{
+					V_Axis_Angle = -V_Axis_Angle;
+				}
+				else if((beta  >90* D2R)&&(beta  <=180*D2R))
+				{
+					V_Axis_Angle = V_Axis_Angle;
+				}
+				else
+				{}
 
-			psi = (beta + V_Axis_Angle - pi/2);
-			theta = -(pi - (alpha - H_Axis_Angle));
-			//生成坐标转换矩阵
-
-
-			//float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
-			//float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
-			//float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
+				psi = (beta + V_Axis_Angle - pi/2);
+				theta = -(pi - (alpha - H_Axis_Angle));
+				//生成坐标转换矩阵
 
 
-			float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
-			float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
-			float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
+				//float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
+				//float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
+				//float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
 
-			float Change_Corrd_Matrix[9];
-			float tempMatrix[9];
-			martixMulti(rolX, 3, 3, rolZ, 3, 3, tempMatrix);
-			martixMulti(tempMatrix, 3, 3, rolY, 3, 3, Change_Corrd_Matrix);
-			int jj;
-			/*
-			printf("fai:%f\n",fai);
-			printf("theta:%f\n",theta);
-			printf("psi:%f\n",psi);
+
+				float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
+				float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
+				float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
+
+				float Change_Corrd_Matrix[9];
+				float tempMatrix[9];
+				martixMulti(rolX, 3, 3, rolZ, 3, 3, tempMatrix);
+				martixMulti(tempMatrix, 3, 3, rolY, 3, 3, Change_Corrd_Matrix);
+				int jj;
+				/*
+				printf("fai:%f\n",fai);
+				printf("theta:%f\n",theta);
+				printf("psi:%f\n",psi);
 
 			
-			printf("rolX旋转矩阵各坐标\n");
-			for(jj = 0;jj<9;jj++)
-			{
-				printf("%f\n",rolX[jj]);
-			}
-			printf("rolY旋转矩阵各坐标\n");
-			for(jj = 0;jj<9;jj++)
-			{
-				printf("%f\n",rolY[jj]);
-			}
-			for(jj = 0;jj<9;jj++)
-			{
-				printf("%f\n",rolZ[jj]);
-			}
-			printf("旋转矩阵各坐标\n");
-			for(jj = 0;jj<9;jj++)
-			{
-				printf("%f\n",Change_Corrd_Matrix[jj]);
-			}
-			printf("目标坐标系下基阵几何中心坐标\n");	
-			printf("%f %f %f\n",R0 * sin(beta) * cos(alpha),R0 * cos(beta),R0 * sin(beta) * sin(alpha));
-			*/
-			printf("目标坐标系下各坐标\n");	
-			for(int idx=0;idx<sumnum;idx++)
-			{
-				martixMulti(Change_Corrd_Matrix, 3, 3, receive_points[idx].p, 3, 1, New_receive_points[idx].p);
-				printf("%f %f %f\n",New_receive_points[idx].p[0],New_receive_points[idx].p[1],New_receive_points[idx].p[2]);
-				New_receive_points[idx].p[0] += R0 * sin(beta) * cos(alpha);
-				New_receive_points[idx].p[1] += R0 * cos(beta);
-				New_receive_points[idx].p[2] += R0 * sin(beta) * sin(alpha);
+				printf("rolX旋转矩阵各坐标\n");
+				for(jj = 0;jj<9;jj++)
+				{
+					printf("%f\n",rolX[jj]);
+				}
+				printf("rolY旋转矩阵各坐标\n");
+				for(jj = 0;jj<9;jj++)
+				{
+					printf("%f\n",rolY[jj]);
+				}
+				for(jj = 0;jj<9;jj++)
+				{
+					printf("%f\n",rolZ[jj]);
+				}
+				printf("旋转矩阵各坐标\n");
+				for(jj = 0;jj<9;jj++)
+				{
+					printf("%f\n",Change_Corrd_Matrix[jj]);
+				}
+				printf("目标坐标系下基阵几何中心坐标\n");	
+				printf("%f %f %f\n",R0 * sin(beta) * cos(alpha),R0 * cos(beta),R0 * sin(beta) * sin(alpha));
+				*/
+				printf("目标坐标系下各坐标\n");	
+				for(int idx=0;idx<sumnum;idx++)
+				{
+					martixMulti(Change_Corrd_Matrix, 3, 3, receive_points[idx].p, 3, 1, New_receive_points[idx].p);
+					printf("%f %f %f\n",New_receive_points[idx].p[0],New_receive_points[idx].p[1],New_receive_points[idx].p[2]);
+					New_receive_points[idx].p[0] += R0 * sin(beta) * cos(alpha);
+					New_receive_points[idx].p[1] += R0 * cos(beta);
+					New_receive_points[idx].p[2] += R0 * sin(beta) * sin(alpha);
 
-				//互换y、z坐标，保证一致
-				float temp_index = 0;
-				temp_index = New_receive_points[idx].p[1];
-				New_receive_points[idx].p[1] = New_receive_points[idx].p[2];
-				New_receive_points[idx].p[2] = temp_index;
+					//互换y、z坐标，保证一致
+					float temp_index = 0;
+					temp_index = New_receive_points[idx].p[1];
+					New_receive_points[idx].p[1] = New_receive_points[idx].p[2];
+					New_receive_points[idx].p[2] = temp_index;
 
-			}
+				}
 			
-			//多点接收阵列坐标转换到目标坐标系结束
+				//多点接收阵列坐标转换到目标坐标系结束
 
 
-		//	float *s_sum_re;//20200919 面积积分结果
-			//float* s_sum_im;//20200919 面积积分结果
+				//	float *s_sum_re;//20200919 面积积分结果
+				//float* s_sum_im;//20200919 面积积分结果
 
-			// 动态生成子孔径面边界信息
-			ConstructVirtualFace(AperturePlane, SubAperturePlane, PreAngelTime, calcInfo.config.card_num, e_st_min[i], e_fi_max[i], pre_device_width[i], height[i], calcInfo.config.pipe_size * calcInfo.config.wave_length);
+				// 动态生成子孔径面边界信息
+				ConstructVirtualFace(AperturePlane, SubAperturePlane, PreAngelTime, calcInfo.config.card_num, e_st_min[i], e_fi_max[i], pre_device_width[i], height[i], calcInfo.config.pipe_size * calcInfo.config.wave_length);
 			
-			// 开始计时
-			for(int index=0;index<calcInfo.config.card_num;index++)
-            		{
-               	 		runSimpleTime[index].Time_Start();
-            		}
+				// 开始计时
+				for(int index=0;index<calcInfo.config.card_num;index++)
+            	{
+               	 	runSimpleTime[index].Time_Start();
+            	}
 			
-			//多卡并行计算
-            simple_time simple_time_TS_compute;
-            simple_time_TS_compute.Time_Start();
-			omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA device
-#pragma omp parallel
-			{
+				//多卡并行计算
+            	simple_time simple_time_TS_compute;
+            	simple_time_TS_compute.Time_Start();
+				omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA device
+				#pragma omp parallel
+				{
 				int j = omp_get_thread_num();                        //目前线程id,即卡id
 				int num_threads = omp_get_num_threads();             //获取卡的数量
 				cudaSetDevice(calcInfo.config.select_device_list[j]);
@@ -744,28 +745,28 @@ void* calcThreadFunction(void *argv)
 					&(plan[j].DivRayTubeNum1st), plan[j].d_sum_gmem, plan[j].d_sum_Gmem, plan[j].d_squares_pred, plan[j].direction, angle, abs_waterLine_axis);
                 
                 //声场积分
-		RayBeamInfo* c_effrays = (RayBeamInfo*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height  * sizeof(RayBeamInfo));
+				RayBeamInfo* c_effrays = (RayBeamInfo*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height  * sizeof(RayBeamInfo));
 
 				comp sum = sound_field_integral_gpu(plan[j].d_rays1, plan[j].d_squares1, lmd, SubAperturePlane[j].width * SubAperturePlane[j].height, plan[j].d_effrays, plan[j].d_center,
 					plan[j].d_axis, plan[j].d_transMat, plan[j].d_reim, plan[j].d_sum_re, plan[j].d_sum_im, fai_angle, angle, &(calcInfo.config));//20210831姬梓遇
                 calcTime[j]+=runSimpleTime[j].Time_End();
 
-		HANDLE_ERROR(cudaMemcpy(c_effrays, plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(RayBeamInfo), cudaMemcpyDeviceToHost)); 
+				HANDLE_ERROR(cudaMemcpy(c_effrays, plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(RayBeamInfo), cudaMemcpyDeviceToHost)); 
 
 
-		//copy出各声线的d_center,用于下面计算时域积分的maxsize	20220610
-		Vector* c_center = (Vector*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector));
-		HANDLE_ERROR(cudaMemcpy(c_center, plan[j].d_center, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector), cudaMemcpyDeviceToHost)); 
+				//copy出各声线的d_center,用于下面计算时域积分的maxsize	20220610
+				Vector* c_center = (Vector*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector));
+				HANDLE_ERROR(cudaMemcpy(c_center, plan[j].d_center, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector), cudaMemcpyDeviceToHost)); 
 
-		for(int idx=0;idx<SubAperturePlane[j].width * SubAperturePlane[j].height;idx++)
-		{
-			float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
-			int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
-			if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
-			if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
-		}//20210308
-		free(c_effrays);
-        free(c_center);	   
+				for(int idx=0;idx<SubAperturePlane[j].width * SubAperturePlane[j].height;idx++)
+				{
+					float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
+					int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
+					if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
+					if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+				}//20210308
+				free(c_effrays);
+        		free(c_center);	   
                 //拷贝出积分结果，用来伪彩图显示
 				cudaMemcpy(h_reim[j], plan[j].d_reim, d_width_max * d_height_max * sizeof(ReimOutput), cudaMemcpyDeviceToHost);
 				for (int n = 0; n < d_width_max * d_height_max; n++)
@@ -808,20 +809,20 @@ void* calcThreadFunction(void *argv)
 
 			}
 		
-		s_sum_re = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果
-		s_sum_im = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果	
-		//20210331
-		omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
-#pragma omp parallel
-		{
-			int j = omp_get_thread_num();
-			HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[j]));
+			s_sum_re = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果
+			s_sum_im = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果	
+			//20210331
+			omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
+			#pragma omp parallel
+			{
+				int j = omp_get_thread_num();
+				HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[j]));
 		
-			HANDLE_ERROR(cudaMemcpy(s_sum_re+ j * maxsize, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
-			HANDLE_ERROR(cudaMemcpy(s_sum_im+ j * maxsize, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
-			cudaFree(d_m_sum_re[j]);
-			cudaFree(d_m_sum_im[j]);
-		}	
+				HANDLE_ERROR(cudaMemcpy(s_sum_re+ j * maxsize, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+				HANDLE_ERROR(cudaMemcpy(s_sum_im+ j * maxsize, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+				cudaFree(d_m_sum_re[j]);
+				cudaFree(d_m_sum_im[j]);
+			}	
 			
             //simple_time simple_time_TS_compute;
             //simple_time_TS_compute.Time_Start();
@@ -990,7 +991,7 @@ void* calcThreadFunction(void *argv)
 					send_frame(socketClient, (char*)&frame, sizeof(Frame));
 					break;
 				}
-			 }
+			}
 
 
 
@@ -999,11 +1000,11 @@ void* calcThreadFunction(void *argv)
 			//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			angle ++;          
-		}
+			}
 		
-	}
-	start_alpha = calcInfo.config.start_alpha;
-	printf("第%d个阵元计算完毕\n",recv_index);
+		}
+		start_alpha = calcInfo.config.start_alpha;
+		printf("第%d个阵元计算完毕\n",recv_index);
 	}
     fclose(fileresult_TS);
 	free(result_1200_re);
@@ -1017,7 +1018,7 @@ void* calcThreadFunction(void *argv)
 
 
 	omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
-#pragma omp parallel
+	#pragma omp parallel
 	{
 		int i = omp_get_thread_num();
 		HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[i]));
