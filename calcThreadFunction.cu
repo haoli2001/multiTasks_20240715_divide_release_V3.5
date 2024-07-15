@@ -594,433 +594,433 @@ void* calcThreadFunction(void *argv)
 				//分割虚拟孔径面
 				divide_module_virtualface(divided_num[i], calcInfo.config.pipe_size*calcInfo.config.wave_length, sumAngleNum, pre_device_width[i], height[i], e_st_min[i], e_fi_max[i], divided_width, divided_height, divided_st_min, divided_fi_max);
 
-
-
-
-
-
-            	//多卡的时间统计 同时启动
-            	simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
-           		float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);
-           		memset(calcTime,0,sizeof(float)*calcInfo.config.card_num);
-				// = fopen("i", "w");//wangying
-				sprintf(nameout,"./data/%.2f_recv%d.txt",angle,recv_index);
-				fileresult_1200=fopen(nameout,"w");//20200924
+				//循环计算切分的虚拟孔径面
+				for(int divided_idx=0;divided_idx<divided_num[i];divided_idx++)
+				{
+					//多卡的时间统计 同时启动
+            		simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
+           			float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);
+           			memset(calcTime,0,sizeof(float)*calcInfo.config.card_num);
+					// = fopen("i", "w");//wangying
+					sprintf(nameout,"./data/%.2f_recv%d.txt",angle,recv_index);
+					fileresult_1200=fopen(nameout,"w");//20200924
 		
-				pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-            	//线程退出的监视点
-				pthread_testcancel(); 
-				//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
-				pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-            	//先将数据清零，避免上一度的结果影响
-				for (int p = 0; p < calcInfo.config.card_num; p++)
-				{
-					memset(h_TSOfPerTriangle[p], 0, sizeof(comp) * calcInfo.triangles_length);
-				}
-				comp *rnt_sum = (comp *)malloc(sizeof(comp)*calcInfo.config.card_num);
-				memset(rnt_sum, 0,sizeof(comp)*calcInfo.config.card_num);
-				float lmd = 1.5 / f;          // 声波波长
-
-
-				//多点接收阵列坐标转换到目标坐标系
-				float R0 = far_dis;
-				float alpha = angle * D2R;
-				float beta = fai_angle * D2R;
-				//float P0_B_A = R0 * sin(beta) * cos(alpha)
-				float H_Axis_Angle = calcInfo.config.H_axis_angle * D2R;
-				float V_Axis_Angle = calcInfo.config.V_axis_angle * D2R;
-		
-				printf("H_Axis_Angle = %f\n",H_Axis_Angle);	//调试用
-				if((alpha >=0* D2R)&&(alpha <90*D2R))
-				{
-					H_Axis_Angle = H_Axis_Angle;
-				}
-				else if((alpha >=90* D2R)&&(alpha <=180*D2R))
-				{
-					H_Axis_Angle = -H_Axis_Angle;
-				}
-				else
-				{}
-
-				if((beta  >=0* D2R)&&(beta  <90*D2R))
-				{
-					V_Axis_Angle = -V_Axis_Angle;
-				}
-				else if((beta  >90* D2R)&&(beta  <=180*D2R))
-				{
-					V_Axis_Angle = V_Axis_Angle;
-				}
-				else
-				{}
-
-				psi = (beta + V_Axis_Angle - pi/2);
-				theta = -(pi - (alpha - H_Axis_Angle));
-				//生成坐标转换矩阵
-
-
-				//float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
-				//float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
-				//float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
-
-
-				float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
-				float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
-				float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
-
-				float Change_Corrd_Matrix[9];
-				float tempMatrix[9];
-				martixMulti(rolX, 3, 3, rolZ, 3, 3, tempMatrix);
-				martixMulti(tempMatrix, 3, 3, rolY, 3, 3, Change_Corrd_Matrix);
-				int jj;
-				/*
-				printf("fai:%f\n",fai);
-				printf("theta:%f\n",theta);
-				printf("psi:%f\n",psi);
-
-			
-				printf("rolX旋转矩阵各坐标\n");
-				for(jj = 0;jj<9;jj++)
-				{
-					printf("%f\n",rolX[jj]);
-				}
-				printf("rolY旋转矩阵各坐标\n");
-				for(jj = 0;jj<9;jj++)
-				{
-					printf("%f\n",rolY[jj]);
-				}
-				for(jj = 0;jj<9;jj++)
-				{
-					printf("%f\n",rolZ[jj]);
-				}
-				printf("旋转矩阵各坐标\n");
-				for(jj = 0;jj<9;jj++)
-				{
-					printf("%f\n",Change_Corrd_Matrix[jj]);
-				}
-				printf("目标坐标系下基阵几何中心坐标\n");	
-				printf("%f %f %f\n",R0 * sin(beta) * cos(alpha),R0 * cos(beta),R0 * sin(beta) * sin(alpha));
-				*/
-				printf("目标坐标系下各坐标\n");	
-				for(int idx=0;idx<sumnum;idx++)
-				{
-					martixMulti(Change_Corrd_Matrix, 3, 3, receive_points[idx].p, 3, 1, New_receive_points[idx].p);
-					printf("%f %f %f\n",New_receive_points[idx].p[0],New_receive_points[idx].p[1],New_receive_points[idx].p[2]);
-					New_receive_points[idx].p[0] += R0 * sin(beta) * cos(alpha);
-					New_receive_points[idx].p[1] += R0 * cos(beta);
-					New_receive_points[idx].p[2] += R0 * sin(beta) * sin(alpha);
-
-					//互换y、z坐标，保证一致
-					float temp_index = 0;
-					temp_index = New_receive_points[idx].p[1];
-					New_receive_points[idx].p[1] = New_receive_points[idx].p[2];
-					New_receive_points[idx].p[2] = temp_index;
-
-				}
-			
-				//多点接收阵列坐标转换到目标坐标系结束
-
-
-				//	float *s_sum_re;//20200919 面积积分结果
-				//float* s_sum_im;//20200919 面积积分结果
-
-				// 动态生成子孔径面边界信息
-				ConstructVirtualFace(AperturePlane, SubAperturePlane, PreAngelTime, calcInfo.config.card_num, e_st_min[i], e_fi_max[i], pre_device_width[i], height[i], calcInfo.config.pipe_size * calcInfo.config.wave_length);
-			
-				// 开始计时
-				for(int index=0;index<calcInfo.config.card_num;index++)
-            	{
-               	 	runSimpleTime[index].Time_Start();
-            	}
-			
-				//多卡并行计算
-            	simple_time simple_time_TS_compute;
-            	simple_time_TS_compute.Time_Start();
-				omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA device
-				#pragma omp parallel
-				{
-				int j = omp_get_thread_num();                        //目前线程id,即卡id
-				int num_threads = omp_get_num_threads();             //获取卡的数量
-				cudaSetDevice(calcInfo.config.select_device_list[j]);
-				//cudaDeviceEnablePeerAccess(j, 0);
-
-				Radius direction_radius = { far_dis, fai_angle, angle }; //snw 接入远场距离
-				//printf("direction_radius={%f,%f,%f}\n",direction_radius.Xr,direction_radius.Yst,direction_radius.Zfi);
-				plan[j].direction = dSphericaltoRectangular(direction_radius);//等相位面的法向量
-
-				MemsetOnGPU(d_width_max, d_height_max, &plan[j].d_rays1, &plan[j].d_squares1, &plan[j].d_rays2, &plan[j].d_squares2,
-					&plan[j].d_effrays, &plan[j].d_center, &plan[j].d_axis, &plan[j].d_transMat, &plan[j].d_reim, &plan[j].d_sum_re, &plan[j].d_sum_im, &plan[j].d_sum_sre, &plan[j].d_sum_sim,
-					&plan[j].d_DivRayTubeNum, &plan[j].d_sum_gmem, &plan[j].d_sum_Gmem, &plan[j].d_squares_pred);
-					
-				//printf("GPU%d: width=%d, height=%d, st_min=%e, fi_max=%e\n", j, SubAperturePlane[j].width, SubAperturePlane[j].height, SubAperturePlane[j].st_min, SubAperturePlane[j].fi_max);
-
-                //创建虚拟孔径面
-				create_virtualface_gpu(plan[j].d_rays1, plan[j].d_squares1, SubAperturePlane[j].width, SubAperturePlane[j].height,
-					calcInfo.config.pipe_size * calcInfo.config.wave_length, direction_radius, SubAperturePlane[j].st_min, SubAperturePlane[j].fi_max, j);
-                
-                //射线追踪
-				allraystrace_v2(plan[j].d_rays1, plan[j].d_squares1, SubAperturePlane[j].width, SubAperturePlane[j].height,
-					plan[j].d_tree, plan[j].d_out_array, plan[j].d_points, plan[j].d_triangles, plan[j].d_DivRayTubeNum,
-					&(plan[j].DivRayTubeNum1st), plan[j].d_sum_gmem, plan[j].d_sum_Gmem, plan[j].d_squares_pred, plan[j].direction, angle, abs_waterLine_axis);
-                
-                //声场积分
-				RayBeamInfo* c_effrays = (RayBeamInfo*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height  * sizeof(RayBeamInfo));
-
-				comp sum = sound_field_integral_gpu(plan[j].d_rays1, plan[j].d_squares1, lmd, SubAperturePlane[j].width * SubAperturePlane[j].height, plan[j].d_effrays, plan[j].d_center,
-					plan[j].d_axis, plan[j].d_transMat, plan[j].d_reim, plan[j].d_sum_re, plan[j].d_sum_im, fai_angle, angle, &(calcInfo.config));//20210831姬梓遇
-                calcTime[j]+=runSimpleTime[j].Time_End();
-
-				HANDLE_ERROR(cudaMemcpy(c_effrays, plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(RayBeamInfo), cudaMemcpyDeviceToHost)); 
-
-
-				//copy出各声线的d_center,用于下面计算时域积分的maxsize	20220610
-				Vector* c_center = (Vector*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector));
-				HANDLE_ERROR(cudaMemcpy(c_center, plan[j].d_center, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector), cudaMemcpyDeviceToHost)); 
-
-				for(int idx=0;idx<SubAperturePlane[j].width * SubAperturePlane[j].height;idx++)
-				{
-					float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
-					int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
-					if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
-					if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
-				}//20210308
-				free(c_effrays);
-        		free(c_center);	   
-                //拷贝出积分结果，用来伪彩图显示
-				cudaMemcpy(h_reim[j], plan[j].d_reim, d_width_max * d_height_max * sizeof(ReimOutput), cudaMemcpyDeviceToHost);
-				for (int n = 0; n < d_width_max * d_height_max; n++)
-				{
-					if (h_reim[j][n].triangle_index >= 0)
+					pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+            		//线程退出的监视点
+					pthread_testcancel(); 
+					//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
+					pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+            		//先将数据清零，避免上一度的结果影响
+					for (int p = 0; p < calcInfo.config.card_num; p++)
 					{
-						h_TSOfPerTriangle[j][h_reim[j][n].triangle_index].re += h_reim[j][n].re;
-						h_TSOfPerTriangle[j][h_reim[j][n].triangle_index].im += h_reim[j][n].im;
+						memset(h_TSOfPerTriangle[p], 0, sizeof(comp) * calcInfo.triangles_length);
+					}
+					comp *rnt_sum = (comp *)malloc(sizeof(comp)*calcInfo.config.card_num);
+					memset(rnt_sum, 0,sizeof(comp)*calcInfo.config.card_num);
+					float lmd = 1.5 / f;          // 声波波长
+
+
+					//多点接收阵列坐标转换到目标坐标系
+					float R0 = far_dis;
+					float alpha = angle * D2R;
+					float beta = fai_angle * D2R;
+					//float P0_B_A = R0 * sin(beta) * cos(alpha)
+					float H_Axis_Angle = calcInfo.config.H_axis_angle * D2R;
+					float V_Axis_Angle = calcInfo.config.V_axis_angle * D2R;
+		
+					printf("H_Axis_Angle = %f\n",H_Axis_Angle);	//调试用
+					if((alpha >=0* D2R)&&(alpha <90*D2R))
+					{
+						H_Axis_Angle = H_Axis_Angle;
+					}
+					else if((alpha >=90* D2R)&&(alpha <=180*D2R))
+					{
+						H_Axis_Angle = -H_Axis_Angle;
+					}
+					else
+					{}
+
+					if((beta  >=0* D2R)&&(beta  <90*D2R))
+					{
+						V_Axis_Angle = -V_Axis_Angle;
+					}
+					else if((beta  >90* D2R)&&(beta  <=180*D2R))
+					{
+						V_Axis_Angle = V_Axis_Angle;
+					}
+					else
+					{}
+
+					psi = (beta + V_Axis_Angle - pi/2);
+					theta = -(pi - (alpha - H_Axis_Angle));
+					//生成坐标转换矩阵
+
+
+					//float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
+					//float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
+					//float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
+
+
+					float rolX[9] = {1,0,0,0,cos(fai),sin(fai),0,-sin(fai),cos(fai)};
+					float rolY[9] = {cos(theta),0,-sin(theta),0,1,0,sin(theta),0,cos(theta)};
+					float rolZ[9] = {cos(psi),sin(psi),0,-sin(psi),cos(psi),0,0,0,1};
+
+					float Change_Corrd_Matrix[9];
+					float tempMatrix[9];
+					martixMulti(rolX, 3, 3, rolZ, 3, 3, tempMatrix);
+					martixMulti(tempMatrix, 3, 3, rolY, 3, 3, Change_Corrd_Matrix);
+					int jj;
+					/*
+					printf("fai:%f\n",fai);
+					printf("theta:%f\n",theta);
+					printf("psi:%f\n",psi);
+
+			
+					printf("rolX旋转矩阵各坐标\n");
+					for(jj = 0;jj<9;jj++)
+					{
+						printf("%f\n",rolX[jj]);
+					}
+					printf("rolY旋转矩阵各坐标\n");
+					for(jj = 0;jj<9;jj++)
+					{
+						printf("%f\n",rolY[jj]);
+					}
+					for(jj = 0;jj<9;jj++)
+					{
+						printf("%f\n",rolZ[jj]);
+					}
+					printf("旋转矩阵各坐标\n");
+					for(jj = 0;jj<9;jj++)
+					{
+						printf("%f\n",Change_Corrd_Matrix[jj]);
+					}
+					printf("目标坐标系下基阵几何中心坐标\n");	
+					printf("%f %f %f\n",R0 * sin(beta) * cos(alpha),R0 * cos(beta),R0 * sin(beta) * sin(alpha));
+					*/
+					printf("目标坐标系下各坐标\n");	
+					for(int idx=0;idx<sumnum;idx++)
+					{
+						martixMulti(Change_Corrd_Matrix, 3, 3, receive_points[idx].p, 3, 1, New_receive_points[idx].p);
+						printf("%f %f %f\n",New_receive_points[idx].p[0],New_receive_points[idx].p[1],New_receive_points[idx].p[2]);
+						New_receive_points[idx].p[0] += R0 * sin(beta) * cos(alpha);
+						New_receive_points[idx].p[1] += R0 * cos(beta);
+						New_receive_points[idx].p[2] += R0 * sin(beta) * sin(alpha);
+
+						//互换y、z坐标，保证一致
+						float temp_index = 0;
+						temp_index = New_receive_points[idx].p[1];
+						New_receive_points[idx].p[1] = New_receive_points[idx].p[2];
+						New_receive_points[idx].p[2] = temp_index;
+
+					}
+				
+					//多点接收阵列坐标转换到目标坐标系结束
+
+
+					//	float *s_sum_re;//20200919 面积积分结果
+					//float* s_sum_im;//20200919 面积积分结果
+
+					// 动态生成子孔径面边界信息
+					ConstructVirtualFace(AperturePlane, SubAperturePlane, PreAngelTime, calcInfo.config.card_num, e_st_min[i], e_fi_max[i], pre_device_width[i], height[i], calcInfo.config.pipe_size * calcInfo.config.wave_length);
+				
+					// 开始计时
+					for(int index=0;index<calcInfo.config.card_num;index++)
+					{
+						runSimpleTime[index].Time_Start();
+					}
+				
+					//多卡并行计算
+					simple_time simple_time_TS_compute;
+					simple_time_TS_compute.Time_Start();
+					omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA device
+					#pragma omp parallel
+					{
+					int j = omp_get_thread_num();                        //目前线程id,即卡id
+					int num_threads = omp_get_num_threads();             //获取卡的数量
+					cudaSetDevice(calcInfo.config.select_device_list[j]);
+					//cudaDeviceEnablePeerAccess(j, 0);
+
+					Radius direction_radius = { far_dis, fai_angle, angle }; //snw 接入远场距离
+					//printf("direction_radius={%f,%f,%f}\n",direction_radius.Xr,direction_radius.Yst,direction_radius.Zfi);
+					plan[j].direction = dSphericaltoRectangular(direction_radius);//等相位面的法向量
+
+					MemsetOnGPU(d_width_max, d_height_max, &plan[j].d_rays1, &plan[j].d_squares1, &plan[j].d_rays2, &plan[j].d_squares2,
+						&plan[j].d_effrays, &plan[j].d_center, &plan[j].d_axis, &plan[j].d_transMat, &plan[j].d_reim, &plan[j].d_sum_re, &plan[j].d_sum_im, &plan[j].d_sum_sre, &plan[j].d_sum_sim,
+						&plan[j].d_DivRayTubeNum, &plan[j].d_sum_gmem, &plan[j].d_sum_Gmem, &plan[j].d_squares_pred);
+						
+					//printf("GPU%d: width=%d, height=%d, st_min=%e, fi_max=%e\n", j, SubAperturePlane[j].width, SubAperturePlane[j].height, SubAperturePlane[j].st_min, SubAperturePlane[j].fi_max);
+
+					//创建虚拟孔径面
+					create_virtualface_gpu(plan[j].d_rays1, plan[j].d_squares1, SubAperturePlane[j].width, SubAperturePlane[j].height,
+						calcInfo.config.pipe_size * calcInfo.config.wave_length, direction_radius, SubAperturePlane[j].st_min, SubAperturePlane[j].fi_max, j);
+					
+					//射线追踪
+					allraystrace_v2(plan[j].d_rays1, plan[j].d_squares1, SubAperturePlane[j].width, SubAperturePlane[j].height,
+						plan[j].d_tree, plan[j].d_out_array, plan[j].d_points, plan[j].d_triangles, plan[j].d_DivRayTubeNum,
+						&(plan[j].DivRayTubeNum1st), plan[j].d_sum_gmem, plan[j].d_sum_Gmem, plan[j].d_squares_pred, plan[j].direction, angle, abs_waterLine_axis);
+					
+					//声场积分
+					RayBeamInfo* c_effrays = (RayBeamInfo*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height  * sizeof(RayBeamInfo));
+
+					comp sum = sound_field_integral_gpu(plan[j].d_rays1, plan[j].d_squares1, lmd, SubAperturePlane[j].width * SubAperturePlane[j].height, plan[j].d_effrays, plan[j].d_center,
+						plan[j].d_axis, plan[j].d_transMat, plan[j].d_reim, plan[j].d_sum_re, plan[j].d_sum_im, fai_angle, angle, &(calcInfo.config));//20210831姬梓遇
+					calcTime[j]+=runSimpleTime[j].Time_End();
+
+					HANDLE_ERROR(cudaMemcpy(c_effrays, plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(RayBeamInfo), cudaMemcpyDeviceToHost)); 
+
+
+					//copy出各声线的d_center,用于下面计算时域积分的maxsize	20220610
+					Vector* c_center = (Vector*)malloc(SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector));
+					HANDLE_ERROR(cudaMemcpy(c_center, plan[j].d_center, SubAperturePlane[j].width * SubAperturePlane[j].height * sizeof(Vector), cudaMemcpyDeviceToHost)); 
+
+					for(int idx=0;idx<SubAperturePlane[j].width * SubAperturePlane[j].height;idx++)
+					{
+						float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
+						int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
+						if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
+						if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+					}//20210308
+					free(c_effrays);
+					free(c_center);	   
+					//拷贝出积分结果，用来伪彩图显示
+					cudaMemcpy(h_reim[j], plan[j].d_reim, d_width_max * d_height_max * sizeof(ReimOutput), cudaMemcpyDeviceToHost);
+					for (int n = 0; n < d_width_max * d_height_max; n++)
+					{
+						if (h_reim[j][n].triangle_index >= 0)
+						{
+							h_TSOfPerTriangle[j][h_reim[j][n].triangle_index].re += h_reim[j][n].re;
+							h_TSOfPerTriangle[j][h_reim[j][n].triangle_index].im += h_reim[j][n].im;
+						}
+					}
+					float reflect_coeff = calcInfo.config.reflect_coeff_Auto_flag ? ReflectCoeff_2(f,i) : calcInfo.config.reflect_coeff; //计算反射系数 姬梓遇
+					sum.re = sum.re * reflect_coeff;//积分结果乘反射系数
+					sum.im = sum.im * reflect_coeff;//积分结果乘反射系数
+					rnt_sum[j].im = sum.im;
+					rnt_sum[j].re = sum.re;
+
+					maxsize = maxZeroNum + taosize - minZeroNum + 400;
+
+					printf("maxsize, minZeroNum, maxZeroNum+taosize: %d, %d, %d\n",maxsize, minZeroNum, maxZeroNum+taosize);
+
+					//float *d_m_sum_re,*d_m_sum_im;
+					
+					//20210331
+					HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_re[j], maxsize * sizeof(float)));
+					HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_im[j], maxsize * sizeof(float)));
+					
+					for (int ig = 0; ig <  maxsize; ig++) 
+					{//wangying 20210308
+						float tao0 = ig * (1 / fs);
+						float wavelength = 2*PI*(fbeg+KO*tao0)/CSpeed;
+						scalfuc(plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height, ig + minZeroNum - 200, d_m_sum_re[j] + ig, d_m_sum_im[j] + ig, calcInfo.config, plan[j].d_center, New_receive_points[recv_index]);//20210331 20210831姬梓遇
+						//scalfuc(plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height, ig + minZeroNum - 200, d_m_sum_re[j] + ig, d_m_sum_im[j] + ig, calcInfo.config, d_one_beam_result[j] + ig);//20210904snw   
+						//printf("ig * sizeof(float): %d\n", ig * sizeof(float));
+
+						//plan[j].d_m_sum_re[ig]=*plan[j].d_sum_sre;
+						//plan[j].d_m_sum_im[ig]=*plan[j].d_sum_sim;
+					}
+
+					
+
+					}
+
+					s_sum_re = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果
+					s_sum_im = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果	
+					//20210331
+					omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
+					#pragma omp parallel
+					{
+						int j = omp_get_thread_num();
+						HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[j]));
+
+						HANDLE_ERROR(cudaMemcpy(s_sum_re+ j * maxsize, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+						HANDLE_ERROR(cudaMemcpy(s_sum_im+ j * maxsize, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
+						cudaFree(d_m_sum_re[j]);
+						cudaFree(d_m_sum_im[j]);
+					}	
+					
+					//simple_time simple_time_TS_compute;
+					//simple_time_TS_compute.Time_Start();
+					//合并每一块卡的积分结果
+					comp all_rnt_sum = {0,0};
+					for(int index=0;index<calcInfo.config.card_num;index++)
+					{
+						all_rnt_sum.re += rnt_sum[index].re;
+						all_rnt_sum.im += rnt_sum[index].im;
+					}
+
+					//memset(result_1200_re, 0, maxsize * sizeof(float));
+					//memset(result_1200_im, 0, maxsize * sizeof(float));
+					
+					free(rnt_sum);
+
+					result_1200_re = (float*)malloc(maxsize * sizeof(float));
+					memset(result_1200_re, 0, maxsize * sizeof(float));
+					result_1200_im = (float*)malloc(maxsize * sizeof(float));
+					memset(result_1200_im, 0, maxsize * sizeof(float));//20200920
+
+					for (int ig =  0; ig <  maxsize; ig++)//wangying 20210308 
+					{
+						float all_s_sum_re = 0;
+						float all_s_sum_im = 0;
+						for (int index = 0; index < calcInfo.config.card_num; index++)
+						{
+							all_s_sum_re += s_sum_re[index * maxsize + ig ];
+							all_s_sum_im += s_sum_im[index * maxsize + ig ];
+						}
+						result_1200_re[ig] = all_s_sum_re;
+						result_1200_im[ig] = all_s_sum_im;
+					}
+
+
+
+					free(s_sum_re);
+					free(s_sum_im);
+
+
+					result_1200 = (float*)malloc( totalsize* sizeof(float));//20210402
+					memset(result_1200, 0, totalsize * sizeof(float));
+					for(int ig =  0; ig <  maxsize; ig++){
+						result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
+						}
+
+
+
+
+					for (int k = 0; k < totalsize; k++)//20210402
+					{
+						//fprintf(fileresult_1200, "%d	%d	%e	%e\n", i,k, result_1200_re[k], result_1200_im[k]);
+						fprintf(fileresult_1200, "%e\n", result_1200[k]);
+					}
+					
+					fclose(fileresult_1200);
+					//计算TS值
+					float result = TS_compute(far_dis,all_rnt_sum, lmd);
+					
+					float time_TS_compute = simple_time_TS_compute.Time_End();
+					
+					float maxcalcTime = -1;
+					for(int index=0;index<calcInfo.config.card_num;index++)
+					{
+						if(calcTime[index]>maxcalcTime)
+							maxcalcTime = calcTime[index];
+					}
+					
+					float time_all = maxcalcTime+time_TS_compute;
+					
+					
+					//计算每一个三角面片的积分结果，用于伪彩图显示
+					memset(pre_triangle_result,0,sizeof(float)*calcInfo.triangles_length);
+					for (int j = 0; j < calcInfo.config.card_num; j++)
+					{
+						for (int index = 0; index < calcInfo.triangles_length; index++)
+						{
+							pre_triangle_result_reim[2*index] += h_TSOfPerTriangle[j][index].re;
+							pre_triangle_result_reim[2*index+1] += h_TSOfPerTriangle[j][index].im;
+							if (h_TSOfPerTriangle[j][index].re != 0 || h_TSOfPerTriangle[j][index].im != 0)
+							{				
+								pre_triangle_result[index] += sqrt(h_TSOfPerTriangle[j][index].re*h_TSOfPerTriangle[j][index].re + h_TSOfPerTriangle[j][index].im*h_TSOfPerTriangle[j][index].im);						
+							}
+						}
+					}
+					
+					// 将各卡计算时间存储成二叉树结构，用于调整下一度子孔径面划分
+					PreAngelTime = ConstructTimeTree(AperturePlane, calcTime, calcInfo.config.card_num);
+				}//module divid circle for() end
+
+	
+				CalcResult calcResult;
+				calcResult.angle = angle;
+				calcResult.calc_time = time_all;
+				calcResult.freq = f;
+				calcResult.raysnum = pre_device_width[i] * height[i] + (pre_device_width[i] + 1)*(height[i] + 1);
+				calcResult.squarenum = pre_device_width[i] * height[i];
+				calcResult.TS = result;
+				calcResult.height = height[i];
+				calcResult.width = pre_device_width[i];
+				calcResult.recvIdx = recv_index;
+
+				fprintf(fileresult_TS,"%e\n",calcResult.TS);  //snw
+
+				Frame frame;
+				strcpy(frame.command, "CalcResult");
+				frame.length = sizeof(CalcResult);
+				memcpy(frame.data, &calcResult, sizeof(CalcResult));
+				//计算结果发送到客户端
+				send_frame(socketClient, (char*)&frame, sizeof(frame));
+
+				int sendedLength = 0;
+				//将每一个三角面片的积分结果模值发送到客户端
+				while (true)
+				{
+					strcpy(frame.command, "PreTriangleResult");
+					if (sendedLength + 1024 < calcInfo.triangles_length*sizeof(float))
+					{
+						memcpy(frame.data, (char*)pre_triangle_result + sendedLength, 1024);
+						frame.length = 1024;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						sendedLength += 1024;
+					}
+					else
+					{
+						memcpy(frame.data, (char*)pre_triangle_result + sendedLength, calcInfo.triangles_length*sizeof(float) - sendedLength);
+						frame.length = calcInfo.triangles_length*sizeof(float) - sendedLength;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						break;
 					}
 				}
-				float reflect_coeff = calcInfo.config.reflect_coeff_Auto_flag ? ReflectCoeff_2(f,i) : calcInfo.config.reflect_coeff; //计算反射系数 姬梓遇
-				sum.re = sum.re * reflect_coeff;//积分结果乘反射系数
-				sum.im = sum.im * reflect_coeff;//积分结果乘反射系数
-				rnt_sum[j].im = sum.im;
-				rnt_sum[j].re = sum.re;
-
-				maxsize = maxZeroNum + taosize - minZeroNum + 400;
-
-				printf("maxsize, minZeroNum, maxZeroNum+taosize: %d, %d, %d\n",maxsize, minZeroNum, maxZeroNum+taosize);
-
-				//float *d_m_sum_re,*d_m_sum_im;
-				
-				//20210331
-				HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_re[j], maxsize * sizeof(float)));
-				HANDLE_ERROR(cudaMalloc((void** )&d_m_sum_im[j], maxsize * sizeof(float)));
-				
-				for (int ig = 0; ig <  maxsize; ig++) 
-				{//wangying 20210308
-					float tao0 = ig * (1 / fs);
-					float wavelength = 2*PI*(fbeg+KO*tao0)/CSpeed;
-					scalfuc(plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height, ig + minZeroNum - 200, d_m_sum_re[j] + ig, d_m_sum_im[j] + ig, calcInfo.config, plan[j].d_center, New_receive_points[recv_index]);//20210331 20210831姬梓遇
-                    //scalfuc(plan[j].d_effrays, SubAperturePlane[j].width * SubAperturePlane[j].height, ig + minZeroNum - 200, d_m_sum_re[j] + ig, d_m_sum_im[j] + ig, calcInfo.config, d_one_beam_result[j] + ig);//20210904snw   
-					//printf("ig * sizeof(float): %d\n", ig * sizeof(float));
-
-					//plan[j].d_m_sum_re[ig]=*plan[j].d_sum_sre;
-					//plan[j].d_m_sum_im[ig]=*plan[j].d_sum_sim;
-				}
-
-				
-
-			}
-		
-			s_sum_re = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果
-			s_sum_im = (float* )malloc(maxsize * sizeof(float) * calcInfo.config.card_num);//20200919 面积积分结果	
-			//20210331
-			omp_set_num_threads(calcInfo.config.card_num);  // create as many CPU threads as there are CUDA devices
-			#pragma omp parallel
-			{
-				int j = omp_get_thread_num();
-				HANDLE_ERROR(cudaSetDevice(calcInfo.config.select_device_list[j]));
-		
-				HANDLE_ERROR(cudaMemcpy(s_sum_re+ j * maxsize, d_m_sum_re[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
-				HANDLE_ERROR(cudaMemcpy(s_sum_im+ j * maxsize, d_m_sum_im[j], maxsize * sizeof(float), cudaMemcpyDeviceToHost));
-				cudaFree(d_m_sum_re[j]);
-				cudaFree(d_m_sum_im[j]);
-			}	
-			
-            //simple_time simple_time_TS_compute;
-            //simple_time_TS_compute.Time_Start();
-            //合并每一块卡的积分结果
-			comp all_rnt_sum = {0,0};
-			for(int index=0;index<calcInfo.config.card_num;index++)
-			{
-				all_rnt_sum.re += rnt_sum[index].re;
-				all_rnt_sum.im += rnt_sum[index].im;
-			}
-
-			//memset(result_1200_re, 0, maxsize * sizeof(float));
-			//memset(result_1200_im, 0, maxsize * sizeof(float));
-			
-			free(rnt_sum);
-
-		 	result_1200_re = (float*)malloc(maxsize * sizeof(float));
-			memset(result_1200_re, 0, maxsize * sizeof(float));
-			result_1200_im = (float*)malloc(maxsize * sizeof(float));
-			memset(result_1200_im, 0, maxsize * sizeof(float));//20200920
-
-			for (int ig =  0; ig <  maxsize; ig++)//wangying 20210308 
-			{
-				float all_s_sum_re = 0;
-				float all_s_sum_im = 0;
-				for (int index = 0; index < calcInfo.config.card_num; index++)
+				//将每一个三角面片的积分结果（实部虚部）发送到客户端
+				sendedLength = 0;
+				while (true)
 				{
-					all_s_sum_re += s_sum_re[index * maxsize + ig ];
-					all_s_sum_im += s_sum_im[index * maxsize + ig ];
-				}
-				result_1200_re[ig] = all_s_sum_re;
-				result_1200_im[ig] = all_s_sum_im;
-			}
-
-
-
-			free(s_sum_re);
-			free(s_sum_im);
-
-
-			result_1200 = (float*)malloc( totalsize* sizeof(float));//20210402
-			memset(result_1200, 0, totalsize * sizeof(float));
-			for(int ig =  0; ig <  maxsize; ig++){
-				result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
-				}
-
-
-
-
-			for (int k = 0; k < totalsize; k++)//20210402
-			{
-				//fprintf(fileresult_1200, "%d	%d	%e	%e\n", i,k, result_1200_re[k], result_1200_im[k]);
-				fprintf(fileresult_1200, "%e\n", result_1200[k]);
-			}
-			
-			fclose(fileresult_1200);
-            //计算TS值
-			float result = TS_compute(far_dis,all_rnt_sum, lmd);
-            
-            float time_TS_compute = simple_time_TS_compute.Time_End();
-			
-			float maxcalcTime = -1;
-            for(int index=0;index<calcInfo.config.card_num;index++)
-			{
-				if(calcTime[index]>maxcalcTime)
-                    maxcalcTime = calcTime[index];
-			}
-            
-            float time_all = maxcalcTime+time_TS_compute;
-            
-            
-            //计算每一个三角面片的积分结果，用于伪彩图显示
-			memset(pre_triangle_result,0,sizeof(float)*calcInfo.triangles_length);
-			for (int j = 0; j < calcInfo.config.card_num; j++)
-			{
-				for (int index = 0; index < calcInfo.triangles_length; index++)
-				{
-					pre_triangle_result_reim[2*index] += h_TSOfPerTriangle[j][index].re;
-					pre_triangle_result_reim[2*index+1] += h_TSOfPerTriangle[j][index].im;
-					if (h_TSOfPerTriangle[j][index].re != 0 || h_TSOfPerTriangle[j][index].im != 0)
-					{				
-						pre_triangle_result[index] += sqrt(h_TSOfPerTriangle[j][index].re*h_TSOfPerTriangle[j][index].re + h_TSOfPerTriangle[j][index].im*h_TSOfPerTriangle[j][index].im);						
+					strcpy(frame.command, "TriangleResultReIm");
+					if (sendedLength + 1024 < 2*calcInfo.triangles_length*sizeof(float))
+					{
+						memcpy(frame.data, (char*)pre_triangle_result_reim + sendedLength, 1024);
+						frame.length = 1024;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						sendedLength += 1024;
+					}
+					else
+					{
+						memcpy(frame.data, (char*)pre_triangle_result_reim + sendedLength, 2*calcInfo.triangles_length*sizeof(float) - sendedLength);
+						frame.length = 2*calcInfo.triangles_length*sizeof(float) - sendedLength;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						break;
 					}
 				}
-			}
+				//将时域积分结果发送回客户端  姬梓遇20210913
+				sendedLength = 0;
+				while (true)
+				{
+					strcpy(frame.command, "re");
+					if (sendedLength + 1024 < totalsize*sizeof(float))
+					{
+						memcpy(frame.data, (char*)result_1200 + sendedLength, 1024);
+						frame.length = 1024;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						sendedLength += 1024;
+					}
+					else
+					{
+						memcpy(frame.data, (char*)result_1200 + sendedLength, totalsize*sizeof(float) - sendedLength);
+						frame.length = totalsize*sizeof(float) - sendedLength;
+						send_frame(socketClient, (char*)&frame, sizeof(Frame));
+						break;
+					}
+				}
+
+
+
+
+				printf("%d\t%d\t%d\t%f\t%d\t%d\t%f\t%f\n", i, pre_device_width[i], height[i], calcInfo.config.pipe_size, 0, 0, result, time_all);
+				//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
+				pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+				angle ++;          
+			}//angle for() end
 			
-			// 将各卡计算时间存储成二叉树结构，用于调整下一度子孔径面划分
-			PreAngelTime = ConstructTimeTree(AperturePlane, calcTime, calcInfo.config.card_num);
-		
-			CalcResult calcResult;
-			calcResult.angle = angle;
-			calcResult.calc_time = time_all;
-			calcResult.freq = f;
-			calcResult.raysnum = pre_device_width[i] * height[i] + (pre_device_width[i] + 1)*(height[i] + 1);
-			calcResult.squarenum = pre_device_width[i] * height[i];
-			calcResult.TS = result;
-			calcResult.height = height[i];
-			calcResult.width = pre_device_width[i];
-			calcResult.recvIdx = recv_index;
-
-            fprintf(fileresult_TS,"%e\n",calcResult.TS);  //snw
-
-			Frame frame;
-			strcpy(frame.command, "CalcResult");
-			frame.length = sizeof(CalcResult);
-			memcpy(frame.data, &calcResult, sizeof(CalcResult));
-            //计算结果发送到客户端
-			send_frame(socketClient, (char*)&frame, sizeof(frame));
-
-			int sendedLength = 0;
-            //将每一个三角面片的积分结果模值发送到客户端
-			while (true)
-			{
-				strcpy(frame.command, "PreTriangleResult");
-				if (sendedLength + 1024 < calcInfo.triangles_length*sizeof(float))
-				{
-					memcpy(frame.data, (char*)pre_triangle_result + sendedLength, 1024);
-					frame.length = 1024;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					sendedLength += 1024;
-				}
-				else
-				{
-					memcpy(frame.data, (char*)pre_triangle_result + sendedLength, calcInfo.triangles_length*sizeof(float) - sendedLength);
-					frame.length = calcInfo.triangles_length*sizeof(float) - sendedLength;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					break;
-				}
-			 }
-			//将每一个三角面片的积分结果（实部虚部）发送到客户端
-			sendedLength = 0;
-			while (true)
-			{
-				strcpy(frame.command, "TriangleResultReIm");
-				if (sendedLength + 1024 < 2*calcInfo.triangles_length*sizeof(float))
-				{
-					memcpy(frame.data, (char*)pre_triangle_result_reim + sendedLength, 1024);
-					frame.length = 1024;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					sendedLength += 1024;
-				}
-				else
-				{
-					memcpy(frame.data, (char*)pre_triangle_result_reim + sendedLength, 2*calcInfo.triangles_length*sizeof(float) - sendedLength);
-					frame.length = 2*calcInfo.triangles_length*sizeof(float) - sendedLength;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					break;
-				}
-			 }
-			//将时域积分结果发送回客户端  姬梓遇20210913
-			sendedLength = 0;
-			while (true)
-			{
-				strcpy(frame.command, "re");
-				if (sendedLength + 1024 < totalsize*sizeof(float))
-				{
-					memcpy(frame.data, (char*)result_1200 + sendedLength, 1024);
-					frame.length = 1024;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					sendedLength += 1024;
-				}
-				else
-				{
-					memcpy(frame.data, (char*)result_1200 + sendedLength, totalsize*sizeof(float) - sendedLength);
-					frame.length = totalsize*sizeof(float) - sendedLength;
-					send_frame(socketClient, (char*)&frame, sizeof(Frame));
-					break;
-				}
-			}
-
-
-
-
-			printf("%d\t%d\t%d\t%f\t%d\t%d\t%f\t%f\n", i, pre_device_width[i], height[i], calcInfo.config.pipe_size, 0, 0, result, time_all);
-			//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
-			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-			angle ++;          
-			}
-		
-		}
+		}//frequency for() end
 		start_alpha = calcInfo.config.start_alpha;
 		printf("第%d个阵元计算完毕\n",recv_index);
 	}
