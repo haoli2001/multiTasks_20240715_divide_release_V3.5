@@ -876,11 +876,11 @@ void allraystrace_v2(Direction *d_rays, Square *d_squares, int width, int height
 	//printf("DivRayTubeNumIdx=%d\n",DivRayTubeNumIdx);
 	//***********
 	DivRayTubeNumAdd << <BlockSize, threadSize >> >(d_DivRayTubeNum, d_sum_Gmem, array_length);
-	HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());
 	HANDLE_ERROR(cudaDeviceSynchronize());
 
 	ScanInArray << <blockSize, threadSize >> >(d_squares, d_squares_pred, width * height);
-	HANDLE_ERROR(cudaGetLastError());
+	//HANDLE_ERROR(cudaGetLastError());
 	
 	dim3 Sizethread(256, 1, 1);
 	dim3 Sizeblock(width * height / 512 + 1, 1, 1);
