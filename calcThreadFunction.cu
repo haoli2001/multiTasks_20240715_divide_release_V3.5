@@ -581,6 +581,24 @@ void* calcThreadFunction(void *argv)
 		{
 			for (int i = start_alpha; i <= calcInfo.config.end_alpha; i++)
 			{
+				float lmd = 1.5 / f;          // 声波波长
+				float time_all=0;
+				result.re=0;
+				result.im=0;
+				memset(result_1200, 0, totalsize * sizeof(float));
+
+				divided_width = (int*)malloc(sizeof(int) * divided_num[i]);
+				divided_height = (int*)malloc(sizeof(int) * divided_num[i]);
+				divided_st_min = (float*)malloc(sizeof(float) * divided_num[i]);
+				divided_fi_max = (float*)malloc(sizeof(float) * divided_num[i]);
+				//分割虚拟孔径面
+				divide_module_virtualface(divided_num[i], calcInfo.config.pipe_size*calcInfo.config.wave_length, sumAngleNum, pre_device_width[i], height[i], e_st_min[i], e_fi_max[i], divided_width, divided_height, divided_st_min, divided_fi_max);
+
+
+
+
+
+
             	//多卡的时间统计 同时启动
             	simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
            		float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);

@@ -307,6 +307,27 @@ void getWidthHeight(float far_dis,Element *points, int num, int *width_calc, int
 	cudaFree(d_fi_min);
 }
 
+
+//输出：切分后的divided_width,divided_height,divided_st_min,divided_fi_max
+void divide_module_virtualface(int divided_num, float lmd, int sumAngleNum, int total_width, int total_height, float total_st_min, float total_fi_max, int* divided_width, int* divided_height, float* divided_st_min,float* divided_fi_max)
+{
+	printf("total_width=%d\n",total_width);
+	printf("total_height=%d\n",total_height);
+	printf("total_st_min=%f\n",total_st_min);
+	printf("total_fi_max=%f\n",total_fi_max);
+	//切分
+	float offset = total_height * lmd / divided_num;
+	printf("divided_num=%d\n",divided_num);
+	for (int i = 0; i < divided_num; i++)
+	{
+		divided_st_min[i] = total_st_min + offset * i;
+		divided_fi_max[i] = total_fi_max;
+		divided_width[i] = total_width;
+		divided_height[i] = offset / lmd ;
+		printf("divided_st_min..:%f,%f,%d,%d\n",divided_st_min[i],divided_fi_max[i],divided_width[i],divided_height[i]);
+	}
+}
+
 void getWidthHeight_Sun(float far_dis,Box b, int *width, int *height, int st, float fi, float lmd, int *dheight, float *de_st_min, float *de_fi_max, int device_num)
 {
 	float  distance = far_dis;//snw
