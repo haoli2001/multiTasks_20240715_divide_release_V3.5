@@ -611,6 +611,8 @@ void* calcThreadFunction(void *argv)
 				//循环计算切分的虚拟孔径面
 				for(int divided_idx=0;divided_idx<divided_num[i];divided_idx++)
 				{
+					printf("\n第%d/%d轮切分\n",divided_idx+1,divided_num[i]);
+					printf("divided_num=%d,divided_width=%d,divided_height=%d,divided_st_min=%f,divided_fi_max=%f\n",divided_num[i],divided_width[divided_idx],divided_height[divided_idx],divided_st_min[divided_idx],divided_fi_max[divided_idx]);
 					//多卡的时间统计 同时启动
             		simple_time *runSimpleTime = new simple_time[calcInfo.config.card_num];
            			float *calcTime = (float*)malloc(sizeof(float)*calcInfo.config.card_num);
@@ -786,13 +788,13 @@ void* calcThreadFunction(void *argv)
 						{
 							float recv_p_cent_distance = sqrt(pow(c_center[idx].x - New_receive_points[recv_index].p[0], 2) + pow(c_center[idx].y - New_receive_points[recv_index].p[1], 2) + pow(c_center[idx].z - New_receive_points[recv_index].p[2], 2));
 							int pendZeroNum = int( (recv_p_cent_distance + c_effrays[idx].p_cent_distance) / CSpeed * fs) ;//wangying  snw:pendZeroNum从2倍距离算起
-							//if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
-							//if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
-							//这里改成如下判断可以加速
-							if(c_effrays[idx].p_cent_distance != 0 && pendZeroNum < minZeroNum) 
-								minZeroNum = pendZeroNum;
-							if(pendZeroNum > maxZeroNum) 
-								maxZeroNum = pendZeroNum;
+							if(pendZeroNum!=0&&pendZeroNum<minZeroNum) minZeroNum=pendZeroNum;
+							if(pendZeroNum>maxZeroNum) maxZeroNum=pendZeroNum;
+							// 
+							// if(c_effrays[idx].p_cent_distance != 0 && pendZeroNum < minZeroNum) 
+							// 	minZeroNum = pendZeroNum;
+							// if(pendZeroNum > maxZeroNum) 
+							// 	maxZeroNum = pendZeroNum;
 						}//20210308
 						free(c_effrays);
 						free(c_center);	   
