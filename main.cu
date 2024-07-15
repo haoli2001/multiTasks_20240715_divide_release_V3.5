@@ -3,7 +3,6 @@
 #include <cuda_runtime.h>
 #include "helper_cuda.h"
 #include <semaphore.h>
-#include <pthread.h>
 #ifdef linux
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -11,7 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <netinet/tcp.h>
-
+pthread_mutex_t socket_mutex;//lihao 20240711ä¼ è¾“é”
 #endif
 #ifdef _UNIX
 #include <sys/types.h>
@@ -38,41 +37,41 @@
 #include "recvThreadFunction.h"
 #include "GPUWatchThreadFun.h"
 
-#define PORT 3490  //¶¨ÒåÄ¬ÈÏ¶Ë¿ÚÎª3490¶Ë¿Ú
+#define PORT 3490  //å®šä¹‰é»˜è®¤ç«¯å£ä¸º3490ç«¯å£
 
 
-//·şÎñÆ÷socketºÍÁ¬½ÓµÄ¿Í»§¶Ësocket 
+//æœåŠ¡å™¨socketå’Œè¿æ¥çš„å®¢æˆ·ç«¯socket 
 int socketSevice;
 
 
 int main()
 {
    
-	pthread_t recvThread;       //¼ÆËãÏß³Ì£»
-	pthread_t GPUWatchThread;   //GPU ¼àÌıÏß³Ì
-	int socketClient[10];       //¿Í»§¶Ësocket
-	int curIndex = 0;           //µ±Ç°Á¬½ÓµÄid
+	pthread_t recvThread;       //è®¡ç®—çº¿ç¨‹ï¼›
+	pthread_t GPUWatchThread;   //GPU ç›‘å¬çº¿ç¨‹
+	int socketClient[10];       //å®¢æˆ·ç«¯socket
+	int curIndex = 0;           //å½“å‰è¿æ¥çš„id
     
     
-	//socketµÄ³õÊ¼»¯£¬°ó¶¨£¬¼àÌıÒÔ¼°µÈ´ıÁ¬½Ó
+	//socketçš„åˆå§‹åŒ–ï¼Œç»‘å®šï¼Œç›‘å¬ä»¥åŠç­‰å¾…è¿æ¥
 	init_socket();
-    //´´½¨Ì×½Ó×Ö
+    //åˆ›å»ºå¥—æ¥å­—
 	socketSevice = create_socket();
-    //½«´´½¨µÄÌ×½Ó×Ö°ó¶¨µ½Ö¸¶¨¶Ë¿Ú
+    //å°†åˆ›å»ºçš„å¥—æ¥å­—ç»‘å®šåˆ°æŒ‡å®šç«¯å£
 	if (-1 == bind_listen(socketSevice, PORT))
 	{ 
 		printf("bind&listen wrong!\n");
 		return 0;
 	}
-	
-    //Ñ­»·¼àÌıÁ¬½ÓĞÅÏ¢
+	pthread_mutex_init(&socket_mutex,NULL);//lihao 20240711 init the mutex
+    //å¾ªç¯ç›‘å¬è¿æ¥ä¿¡æ¯
     while(true) 
     {
-        //¼àÌıÁ¬½Ó£¬µ±½¨Á¢½¨Á¢ºóaccept_client º¯Êı·µ»Ø£¬·ñÔò×èÈû
+        //ç›‘å¬è¿æ¥ï¼Œå½“å»ºç«‹å»ºç«‹åaccept_client å‡½æ•°è¿”å›ï¼Œå¦åˆ™é˜»å¡
         socketClient[curIndex] = accept_client(socketSevice);
         
         int deviceCount;
-        //»ñÈ¡·şÎñÆ÷GPUÉè±¸Êı
+        //è·å–æœåŠ¡å™¨GPUè®¾å¤‡æ•°
         cudaGetDeviceCount(&deviceCount); 
         for (int dev = 0; dev < deviceCount; dev++)
         {
@@ -85,21 +84,27 @@ int main()
             gpuInfo.deviceID = dev;
             gpuInfo.deviceCount = deviceCount;
             strcpy(gpuInfo.deviceName, deviceProp.name);
-            //»ñÈ¡Éè±¸Ã¿¸ö¶à´¦ÀíÆ÷µÄºËĞÄÊıÁ¿
+            //è·å–è®¾å¤‡æ¯ä¸ªå¤šå¤„ç†å™¨çš„æ ¸å¿ƒæ•°é‡
             gpuInfo.coresPreMutiprocess = _ConvertSMVer2Cores(deviceProp.major, deviceProp.minor); 
-            //¶à´¦ÀíÆ÷ÊıÁ¿ 
+            //å¤šå¤„ç†å™¨æ•°é‡ 
             gpuInfo.mutiprocessCount = deviceProp.multiProcessorCount;          
             frame.length = sizeof(DeviceInfo);
             memcpy(frame.data, (char*)&gpuInfo, sizeof(gpuInfo));
-            //Ïò¿Í»§¶Ë·¢ËÍÉè±¸ĞÅÏ¢
-            send_frame(socketClient[curIndex], (char*)&frame, sizeof(Frame));     
+            //å‘å®¢æˆ·ç«¯å‘é€è®¾å¤‡ä¿¡æ¯
+#ifdef linux
+			pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+#endif
+            send_frame(socketClient[curIndex], (char*)&frame, sizeof(Frame));   
+#ifdef linux
+			pthread_mutex_unlock(&socket_mutex);//lihao 20240711  
+#endif
         }
-        pthread_create(&recvThread, NULL, recvThreadFunction, (void*)&(socketClient[curIndex]));    //´´½¨½ÓÊÕÊı¾İµÄÏß³Ì
-        pthread_create(&GPUWatchThread,NULL , GPUWatchThreadFun, (void*)&(socketClient[curIndex]));  //´´½¨GPUÊµÊ±¼à¿ØµÄÏß³Ì
+        pthread_create(&recvThread, NULL, recvThreadFunction, (void*)&(socketClient[curIndex]));    //åˆ›å»ºæ¥æ”¶æ•°æ®çš„çº¿ç¨‹
+        pthread_create(&GPUWatchThread,NULL , GPUWatchThreadFun, (void*)&(socketClient[curIndex]));  //åˆ›å»ºGPUå®æ—¶ç›‘æ§çš„çº¿ç¨‹
         curIndex++;
     }
 	
-    //¼ÆËã½áÊø£¬¹Ø±Õsocket
+    //è®¡ç®—ç»“æŸï¼Œå…³é—­socket
 #ifdef linux
 	for(int i = curIndex-1;i>=0;i--)
 	{	
@@ -108,6 +113,7 @@ int main()
 	}
 	shutdown(socketSevice, SHUT_RDWR);
 	close(socketSevice);
+	pthread_mutex_destroy(&socket_mutex);//lihao 20240711 é”€æ¯é”
 #endif
 #ifdef _UNIX
 	for(int i = curIndex-1;i>=0;i--)

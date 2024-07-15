@@ -17,6 +17,7 @@
 #include "martixMulti.h"
 #include <pthread.h>
 #define MAX_PIPELINE_CAPICITY 150000000
+extern pthread_mutex_t socket_mutex;//lihao 20240711传输锁
 /**************************
 名称：struct PreBlockData
 描述：每一个Block中申请的内存指针
@@ -375,7 +376,13 @@ void* calcThreadFunction(void *argv)
 		strcpy(frame.command, "KDTreeTime");
 		frame.length = sizeof(KDTreeInfo);
 		memcpy(frame.data, &kdtreeinfo, sizeof(KDTreeInfo));
+		#ifdef linux
+			pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+		#endif
 		send_frame(socketClient, (char*)&frame, sizeof(Frame));
+		#ifdef linux
+			pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+		#endif
 	}
     
     //线程退出的监视点
@@ -386,7 +393,9 @@ void* calcThreadFunction(void *argv)
 	{
 		int sendedLength = 0;
 		Frame frame;
-
+		#ifdef linux
+			pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+		#endif
 		while (true)
 		{
 			strcpy(frame.command, "KDTreeDate");
@@ -405,6 +414,9 @@ void* calcThreadFunction(void *argv)
 				break;
 			}
 		}
+		#ifdef linux
+			pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+		#endif
 	}
 	
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
@@ -539,6 +551,8 @@ void* calcThreadFunction(void *argv)
 	int minZeroNum=INT_MAX,maxZeroNum=INT_MIN;//20210308
 
 	float* result_1200;//20210402
+	result_1200 = (float*)malloc( totalsize* 2*sizeof(float));//20210402
+
 	comp result={0,0};
 	float* s_sum_re;//20200919 面积积分结果
 	float* s_sum_im;//20200919 面积积分结果
@@ -581,7 +595,7 @@ void* calcThreadFunction(void *argv)
 				float time_all=0;
 				result.re=0;
 				result.im=0;
-				memset(result_1200, 0, totalsize * sizeof(float));
+				memset(result_1200, 0, totalsize *2* sizeof(float));
 				//先将数据清零，避免上一度的结果影响
 				for (int p = 0; p < calcInfo.config.card_num; p++)
 				{
@@ -869,23 +883,11 @@ void* calcThreadFunction(void *argv)
 					free(s_sum_re);
 					free(s_sum_im);
 
-
-					result_1200 = (float*)malloc( totalsize* sizeof(float));//20210402
-					memset(result_1200, 0, totalsize * sizeof(float));
-					for(int ig =  0; ig <  maxsize; ig++){
-						result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
-						}
-
-
-
-
-					for (int k = 0; k < totalsize; k++)//20210402
+					for(int ig =  0; ig <  maxsize; ig++)
 					{
-						//fprintf(fileresult_1200, "%d	%d	%e	%e\n", i,k, result_1200_re[k], result_1200_im[k]);
-						fprintf(fileresult_1200, "%e\n", result_1200[k]);
+						result_1200[ig+minZeroNum-200]=result_1200_re[ig];//20220719 考虑-200
 					}
-					
-					fclose(fileresult_1200);
+
 
 					//叠加上一轮TS值
 					result.re += all_rnt_sum.re;
@@ -908,6 +910,13 @@ void* calcThreadFunction(void *argv)
 					// 将各卡计算时间存储成二叉树结构，用于调整下一度子孔径面划分
 					PreAngelTime = ConstructTimeTree(AperturePlane, calcTime, calcInfo.config.card_num);
 				}//module divid circle for() end
+				/******************************************************************************/
+				for (int k = 0; k < totalsize; k++)//20210402
+				{
+					//fprintf(fileresult_1200, "%d	%d	%e	%e\n", i,k, result_1200_re[k], result_1200_im[k]);
+					fprintf(fileresult_1200, "%e\n", result_1200[k]);
+				}	
+				fclose(fileresult_1200);
 				if(divided_width!=NULL)
 					free(divided_width);
 				if(divided_height!=NULL)
@@ -940,7 +949,7 @@ void* calcThreadFunction(void *argv)
 				calcResult.height = height[i];
 				calcResult.width = pre_device_width[i];
 				calcResult.recvIdx = recv_index;
-
+				printf("TS:%f\n",calcResult.TS);
 				fprintf(fileresult_TS,"%e\n",calcResult.TS);  //snw
 
 				Frame frame;
@@ -948,10 +957,18 @@ void* calcThreadFunction(void *argv)
 				frame.length = sizeof(CalcResult);
 				memcpy(frame.data, &calcResult, sizeof(CalcResult));
 				//计算结果发送到客户端
+				#ifdef linux
+					pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+				#endif
 				send_frame(socketClient, (char*)&frame, sizeof(frame));
-
+				#ifdef linux
+					pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+				#endif
 				int sendedLength = 0;
 				//将每一个三角面片的积分结果模值发送到客户端
+				#ifdef linux
+					pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+				#endif
 				while (true)
 				{
 					strcpy(frame.command, "PreTriangleResult");
@@ -970,8 +987,14 @@ void* calcThreadFunction(void *argv)
 						break;
 					}
 				}
+				#ifdef linux
+					pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+				#endif
 				//将每一个三角面片的积分结果（实部虚部）发送到客户端
 				sendedLength = 0;
+				#ifdef linux
+					pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+				#endif
 				while (true)
 				{
 					strcpy(frame.command, "TriangleResultReIm");
@@ -990,8 +1013,14 @@ void* calcThreadFunction(void *argv)
 						break;
 					}
 				}
+				#ifdef linux
+					pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+				#endif
 				//将时域积分结果发送回客户端  姬梓遇20210913
 				sendedLength = 0;
+				#ifdef linux
+					pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+				#endif
 				while (true)
 				{
 					strcpy(frame.command, "re");
@@ -1010,8 +1039,11 @@ void* calcThreadFunction(void *argv)
 						break;
 					}
 				}
+				#ifdef linux
+					pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+				#endif
 
-				printf("%d\t%d\t%d\t%f\t%d\t%d\t%f\t%f\n", i, pre_device_width[i], height[i], calcInfo.config.pipe_size, 0, 0, result, time_all);
+				printf("%d\t%d\t%d\t%f\t%d\t%d\t%f\t%f\n", i, pre_device_width[i], height[i], calcInfo.config.pipe_size, 0, 0, calcResult.TS, time_all);
 				//避免线程在其他地方cancel，以保证上位机能正常暂停计算 2022.3.24 jzy
 				pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 				angle ++;          
@@ -1097,8 +1129,13 @@ void* calcThreadFunction(void *argv)
 	Frame frame;
 	strcpy(frame.command, "CalcOver");
 	frame.length = 0;
-
+	#ifdef linux
+		pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+	#endif
 	send_frame(socketClient, (char*)&frame, sizeof(frame));
+	#ifdef linux
+		pthread_mutex_unlock(&socket_mutex);//lihao 20240711 
+	#endif
 	printf("calc over\n");
 	pthread_cleanup_pop(0);
 

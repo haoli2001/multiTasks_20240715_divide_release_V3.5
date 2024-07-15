@@ -10,6 +10,7 @@
 #include "calcThreadFunction.h"
 #include "common_struct.h"
 #include "socketFunctions.h"
+extern pthread_mutex_t socket_mutex;//lihao 20240711传输锁
 void *recvThreadFunction(void *argv)
 {
 	CalcInfo calcInfo;                //解算参数配置
@@ -58,7 +59,13 @@ void *recvThreadFunction(void *argv)
 			Frame frame;
 			strcpy(frame.command, "WaitForConfig");
 			frame.length = 0;
+#ifdef linux
+			pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+#endif
 			send_frame(socketClient, (char*)&frame, sizeof(Frame));
+#ifdef linux
+			pthread_mutex_unlock(&socket_mutex);//lihao 20240711  发送数据时一直占有锁
+#endif
 		}
 		if (!strcmp(frame.command, "RecvPoints"))
 		{

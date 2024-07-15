@@ -1,6 +1,6 @@
 #include "GPUWatchThreadFun.h"
 
-//Ê¹ÓÃNVIDIA¹Ù·½Ìá¹©µÄnvml¿â»ñÈ¡GPU×´Ì¬ĞÅÏ¢
+//ä½¿ç”¨NVIDIAå®˜æ–¹æä¾›çš„nvmlåº“è·å–GPUçŠ¶æ€ä¿¡æ¯
 #include <nvml.h>
 #include "common_struct.h"
 #include <memory.h>
@@ -8,14 +8,15 @@
 #include <string.h>
 #include <unistd.h>
 #include "socketFunctions.h"
+#include <pthread.h>
 
+extern pthread_mutex_t socket_mutex;//lihao 20240711ä¼ è¾“é”
 #ifdef __WINDOWS_
 #include <Windows.h>
 #endif
 #ifdef _WIN32
 #include <Windows.h>
 #endif
-
 
 
 void *GPUWatchThreadFun(void *argv)
@@ -75,12 +76,18 @@ void *GPUWatchThreadFun(void *argv)
 			strcpy(frame.command, "GPUWatch");
 			frame.length = sizeof(GPUWatchStruct);
 			memcpy(frame.data, (char*)&gpuwatchstruct[i], sizeof(GPUWatchStruct));
-			//send_frame(socketClient, (char*)&frame, sizeof(Frame));
+#ifdef linux
+			pthread_mutex_lock(&socket_mutex);//lihao 20240711 
+#endif
+			send_frame(socketClient, (char*)&frame, sizeof(Frame));
+#ifdef linux
+			pthread_mutex_unlock(&socket_mutex);//lihao 20240711  
+#endif
 		}
 	
-        //Ã¿¸ôÒ»Ãë»ñÈ¡Ò»´ÎĞÅÏ¢
+        //æ¯éš”ä¸€ç§’è·å–ä¸€æ¬¡ä¿¡æ¯
 #ifdef linux
-		sleep(1);
+		sleep(5);
 #endif
 #ifdef _UNIX
 		sleep(1);
