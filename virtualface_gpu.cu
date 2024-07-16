@@ -147,7 +147,7 @@ void create_virtualface_gpu(Direction *rays2, Square *squares2, int dwidth, int 
 	dim3 gridsize((dwidth + 1) / TILE_DIM + 1, (dheight + 1) / TILE_DIM + 1);
 	dim3 blocksize(TILE_DIM, TILE_DIM);
 	dcreate_virtualface_gpu << <gridsize, blocksize >> >(direction_radius, rays2, squares2, dheight, dwidth, e_st_min, e_fi_max, lmd);
-	//HANDLE_ERROR(cudaGetLastError());关闭此报错20240715
+	HANDLE_ERROR(cudaGetLastError());
 }
 
 __global__ void dStFiExtreme(Radius* d_spherical, float* d_st_min, float* d_st_max, float* d_fi_min, float* d_fi_max, int nodeNum)
